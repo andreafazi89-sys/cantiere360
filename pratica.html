@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pratica - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/scadenze.js"></script>
+<script src="js/pratiche.js"></script>
+<style>
+.passi{display:flex;flex-direction:column;gap:8px}
+.passo{display:flex;align-items:center;gap:10px;font-size:14px;color:#6b7682}
+.passo i{width:12px;height:12px;border-radius:50%;border:2px solid #b7c0ca;flex:0 0 auto}
+.passo.fatto{color:var(--testo2)}.passo.fatto i{background:var(--primario);border-color:var(--primario)}
+.passo.ora{color:var(--testo);font-weight:700}.passo.ora i{background:#fff;border:4px solid var(--primario)}
+</style>
+</head>
+<body>
+<header class="testata">
+  <a class="indietro" id="link-commessa" href="commesse.html">&larr; Commessa</a>
+  <div class="kicker" id="tipo">&nbsp;</div>
+  <h1 id="oggetto">&nbsp;</h1>
+</header>
+
+<main class="contenuto">
+  <div class="card">
+    <dl class="dati" id="dati"></dl>
+    <div><button type="button" class="btn2" id="b-modifica">Modifica dati</button></div>
+  </div>
+
+  <div class="sezione"><span>Stato</span></div>
+  <div class="card">
+    <div class="passi" id="passi"></div>
+    <form class="riga" id="f-stato" style="margin-top:8px">
+      <label class="campo" style="flex:1;min-width:180px"><span class="nascosto">Nuovo stato</span><select name="stato_id"></select></label>
+      <button type="submit" class="btn">Cambia stato</button>
+    </form>
+  </div>
+
+  <div class="sezione"><span>Scadenze</span><button type="button" class="btn2" id="b-scadenza">+ Scadenza</button></div>
+  <div id="scadenze" class="card"></div>
+
+  <div class="sezione"><span>Storico</span></div>
+  <div id="storico" class="card"></div>
+</main>
+
+<script>
+const ID = param('id');
+let pratica = null, stati = [];
+
+async function caricaPratica() {
+  const { data, error } = await sb.from('pratiche')
+    .select('*, tipi_pratica(nome), stati_pratica(id, nome), commesse(id, codice, titolo, colore, comune, indirizzo, foglio, particella, sub), membri(nome)')
+    .eq('id', ID).eq('eliminato', false).maybeSingle();
+  if (error) { mostraErrore(error); return; }
+  if (!data) { $('#dati').innerHTML = '<dd>Pratica non trovata.</dd>'; return; }
+  pratica = data;
+  const c = data.commesse;
+  document.title = (data.tipi_pratica ? data.tipi_pratica.nome + ' - ' : '') + data.oggetto + ' - Cantiere 360°';
+  $('#link-commessa').href = 'commessa.html?id=' + c.id;
+  $('#link-commessa').textContent = '← ' + (c.codice || c.titolo);
+  $('#tipo').textContent = data.tipi_pratica ? data.tipi_pratica.nome : 'Pratica';
+  $('#oggetto').textContent = data.oggetto;
+  const catasto = [c.foglio && 'Fg. ' + c.foglio, c.particella && 'Part. ' + c.particella, c.sub && 'Sub. ' + c.sub].filter(Boolean).join(' ');
+  const righe = [
+    ['Commessa', etichettaCommessa(c) + ' ' + esc(c.titolo)],
+    ['Immobile', esc([c.indirizzo, c.comune].filter(Boolean).join(', '))],
+    ['Catasto', esc(catasto)],
+    ['Protocollo', esc(data.protocollo || '')],
+    ['Presentata il', fmtData(data.data_presentazione)],
+    ['Codice interno', esc(data.codice_interno || '')],
+    ['Responsabile', esc(data.membri ? data.membri.nome : '')],
+    ['Note', esc(data.note || '').replace(/\n/g, '<br>')]
+  ].filter(r => r[1]);
+  $('#dati').innerHTML = righe.map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
+  disegnaStato();
+}
+
+function disegnaStato() {
+  const iAttuale = stati.findIndex(s => s.id === pratica.stato_id);
+  $('#passi').innerHTML = stati.filter(s => s.attivo || s.id === pratica.stato_id).map(s => {
+    const i = stati.indexOf(s);
+    const cls = i < iAttuale ? 'fatto' : i === iAttuale ? 'ora' : '';
+    return '<div class="passo ' + cls + '"><i></i>' + esc(s.nome) + '</div>';
+  }).join('');
+  const sel = $('#f-stato').elements.stato_id;
+  sel.innerHTML = stati.filter(s => s.attivo).map(s => '<option value="' + s.id + '">' + esc(s.nome) + '</option>').join('');
+  const prossimo = stati.slice(iAttuale + 1).find(s => s.attivo);
+  sel.value = prossimo ? prossimo.id : pratica.stato_id;
+}
+
+async function caricaStorico() {
+  const { data, error } = await sb.from('storico_pratica').select('id, data, da_stato_id, a_stato_id, utente_id, nota')
+    .eq('pratica_id', ID).order('data', { ascending: false });
+  if (error) { mostraErrore(error); return; }
+  const { data: membri } = await sb.from('membri').select('utente_id, nome');
+  const chi = id => { const m = (membri || []).find(x => x.utente_id === id); return m ? m.nome : ''; };
+  const nome = id => { const s = stati.find(x => x.id === id); return s ? s.nome : '?'; };
+  $('#storico').innerHTML = data.length ? data.map(h =>
+    '<div><div class="piccolo">' + fmtDataOra(h.data) + (chi(h.utente_id) ? ' &middot; ' + esc(chi(h.utente_id)) : '') + '</div>' +
+    '<div>' + (h.da_stato_id ? esc(nome(h.da_stato_id)) + ' &rarr; ' : 'Creata come ') + '<b>' + esc(nome(h.a_stato_id)) + '</b></div></div>'
+  ).join('') : '<div class="piccolo">Nessun cambio di stato.</div>';
+}
+
+async function caricaScadenzePratica() {
+  const lista = await caricaScadenze({ pratica_id: ID });
+  lista.sort((a, b) => (a.fatta - b.fatta) || a.data.localeCompare(b.data));
+  $('#scadenze').innerHTML = lista.length
+    ? lista.map(s => rigaScadenza(s, { commessa: false, pratica: false })).join('<hr style="border:0;border-top:1px solid var(--tenue);margin:4px 0">')
+    : '<div class="piccolo">Nessuna scadenza.</div>';
+}
+
+(async function () {
+  if (!await avvia('commesse')) return;
+  if (!ID) { location.replace('commesse.html'); return; }
+  const { data } = await sb.from('stati_pratica').select('id, nome, ordine, attivo, chiuso').order('ordine');
+  stati = data || [];
+  await caricaPratica();
+  if (!pratica) return;
+  caricaStorico();
+  caricaScadenzePratica();
+
+  $('#f-stato').addEventListener('submit', async e => {
+    e.preventDefault();
+    const nuovo = e.target.elements.stato_id.value;
+    if (nuovo === pratica.stato_id) { toast('La pratica è già in questo stato'); return; }
+    const { error } = await sb.from('pratiche').update({ stato_id: nuovo }).eq('id', ID);
+    if (error) { mostraErrore(error); return; }
+    toast('Stato aggiornato');
+    await caricaPratica();
+    caricaStorico();
+  });
+  $('#b-modifica').addEventListener('click', () => apriFormPratica(pratica, pratica.commessa_id, () => caricaPratica()));
+  $('#b-scadenza').addEventListener('click', () => apriNuovaScadenza({ commessa_id: pratica.commessa_id, pratica_id: ID }, caricaScadenzePratica));
+  collegaSpunte($('#scadenze'), caricaScadenzePratica);
+})();
+</script>
+</body>
+</html>

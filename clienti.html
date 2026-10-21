@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clienti - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+</head>
+<body>
+<header class="testata">
+  <div class="kicker" id="nome-studio">&nbsp;</div>
+  <h1>Clienti</h1>
+</header>
+
+<main class="contenuto">
+  <div class="riga">
+    <label class="campo" style="flex:1;min-width:180px"><span class="nascosto">Cerca</span>
+      <input type="search" id="cerca" placeholder="Cerca per nome, codice fiscale, email, telefono"></label>
+    <button type="button" class="btn" id="b-nuovo">+ Nuovo cliente</button>
+  </div>
+  <div class="sezione" id="conteggio"></div>
+  <div id="elenco" class="elenco"></div>
+</main>
+
+<dialog id="dlg">
+  <div class="testa"><h2 id="dlg-titolo">Cliente</h2><button type="button" class="btn-link" id="dlg-chiudi">Chiudi</button></div>
+  <form class="modulo" id="f-cliente" method="dialog">
+    <label class="campo">Nome e cognome o ragione sociale<input name="nome" required maxlength="200"></label>
+    <label class="campo">Codice fiscale o partita IVA<input name="cf_piva" maxlength="20" autocapitalize="characters"></label>
+    <div class="griglia">
+      <label class="campo">Telefono<input name="telefono" type="tel" maxlength="40"></label>
+      <label class="campo">Email<input name="email" type="email" maxlength="200"></label>
+    </div>
+    <label class="campo">Indirizzo<input name="indirizzo" maxlength="200"></label>
+    <label class="campo">Note<textarea name="note"></textarea></label>
+    <div id="dlg-commesse" class="piccolo"></div>
+    <div class="azioni"><button type="button" class="btn2 nascosto" id="b-elimina">Elimina cliente</button><button type="submit" class="btn">Salva</button></div>
+  </form>
+</dialog>
+
+<script>
+let tutti = [], testo = '', attuale = null;
+
+function disegna() {
+  const t = testo.toLowerCase();
+  const lista = tutti.filter(c => !t || [c.nome, c.cf_piva, c.email, c.telefono].some(x => x && x.toLowerCase().includes(t)));
+  $('#conteggio').textContent = lista.length + (lista.length === 1 ? ' cliente' : ' clienti');
+  const el = $('#elenco');
+  if (!tutti.length) { el.innerHTML = '<div class="vuoto">Rubrica vuota. Aggiungi il primo cliente con il pulsante qui sopra.</div>'; return; }
+  if (!lista.length) { el.innerHTML = '<div class="vuoto">Nessun cliente trovato.</div>'; return; }
+  el.innerHTML = lista.map(c => {
+    const n = (c.commesse || []).filter(x => !x.eliminato).length;
+    return '<button type="button" class="card" data-id="' + c.id + '">' +
+      '<div class="riga"><b>' + esc(c.nome) + '</b><span class="piccolo">' + n + (n === 1 ? ' commessa' : ' commesse') + '</span></div>' +
+      '<div class="piccolo">' + [c.cf_piva, c.telefono, c.email].filter(Boolean).map(esc).join(' &middot; ') + '</div></button>';
+  }).join('');
+}
+
+async function carica() {
+  const { data, error } = await sb.from('clienti')
+    .select('*, commesse(id, codice, titolo, eliminato)').eq('eliminato', false).order('nome');
+  if (error) { mostraErrore(error); return; }
+  tutti = data;
+  disegna();
+}
+
+function apri(c) {
+  attuale = c;
+  const f = $('#f-cliente');
+  if (c) riempiForm(f, c); else f.reset();
+  $('#dlg-titolo').textContent = c ? 'Modifica cliente' : 'Nuovo cliente';
+  $('#b-elimina').classList.toggle('nascosto', !c);
+  const comm = c ? (c.commesse || []).filter(x => !x.eliminato) : [];
+  $('#dlg-commesse').innerHTML = comm.length ? 'Commesse: ' + comm.map(x =>
+    '<a href="commessa.html?id=' + x.id + '">' + esc(x.codice || x.titolo) + '</a>').join(', ') : '';
+  $('#dlg').showModal();
+}
+
+(async function () {
+  if (!await avvia('clienti')) return;
+  $('#nome-studio').textContent = C360.studio.nome;
+  $('#cerca').addEventListener('input', e => { testo = e.target.value.trim(); disegna(); });
+  $('#b-nuovo').addEventListener('click', () => apri(null));
+  $('#dlg-chiudi').addEventListener('click', () => $('#dlg').close());
+  $('#elenco').addEventListener('click', e => {
+    const b = e.target.closest('[data-id]');
+    if (b) apri(tutti.find(c => c.id === b.dataset.id));
+  });
+  $('#f-cliente').addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = datiForm(e.target);
+    const res = attuale
+      ? await sb.from('clienti').update(v).eq('id', attuale.id)
+      : await sb.from('clienti').insert(Object.assign(v, { studio_id: C360.studio.id }));
+    if (res.error) { mostraErrore(res.error); return; }
+    $('#dlg').close();
+    toast('Cliente salvato');
+    carica();
+  });
+  $('#b-elimina').addEventListener('click', async () => {
+    if (!confirm('Eliminare il cliente "' + attuale.nome + '"? Le sue commesse restano.')) return;
+    const { error } = await sb.from('clienti').update({ eliminato: true }).eq('id', attuale.id);
+    if (error) { mostraErrore(error); return; }
+    $('#dlg').close();
+    toast('Cliente eliminato');
+    carica();
+  });
+  await carica();
+  const daAprire = location.hash.slice(1);
+  if (daAprire) { const c = tutti.find(x => x.id === daAprire); if (c) apri(c); }
+})();
+</script>
+</body>
+</html>

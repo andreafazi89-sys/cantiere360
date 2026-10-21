@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commessa - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/scadenze.js"></script>
+<script src="js/commesse.js"></script>
+<script src="js/pratiche.js"></script>
+</head>
+<body>
+<header class="testata" id="testata">
+  <a class="indietro" href="commesse.html">&larr; Commesse</a>
+  <div class="kicker" id="codice">&nbsp;</div>
+  <h1 id="titolo">&nbsp;</h1>
+</header>
+
+<main class="contenuto">
+  <div class="card">
+    <dl class="dati" id="dati"></dl>
+    <div><button type="button" class="btn2" id="b-modifica">Modifica dati</button></div>
+  </div>
+
+  <div class="sezione"><span>Pratiche</span><button type="button" class="btn2" id="b-pratica">+ Pratica</button></div>
+  <div id="pratiche" class="elenco"></div>
+
+  <div class="sezione"><span>Scadenze</span><button type="button" class="btn2" id="b-scadenza">+ Scadenza</button></div>
+  <div id="scadenze" class="card"></div>
+
+  <div class="sezione"><span>Nei prossimi moduli</span></div>
+  <div class="piccolo">Sopralluoghi e foto, direzione lavori, documenti e tavole, parcella.</div>
+</main>
+
+<script>
+const ID = param('id');
+let commessa = null;
+
+async function caricaCommessa() {
+  const { data, error } = await sb.from('commesse').select('*, clienti(id, nome)').eq('id', ID).eq('eliminato', false).maybeSingle();
+  if (error) { mostraErrore(error); return; }
+  if (!data) { $('#dati').innerHTML = '<dd>Commessa non trovata.</dd>'; return; }
+  commessa = data;
+  document.title = (data.codice || data.titolo) + ' - Cantiere 360°';
+  $('#testata').style.borderBottom = '6px solid ' + data.colore;
+  $('#codice').textContent = data.codice || '';
+  $('#titolo').textContent = data.titolo;
+  const catasto = [data.foglio && 'Fg. ' + data.foglio, data.particella && 'Part. ' + data.particella, data.sub && 'Sub. ' + data.sub].filter(Boolean).join(' ');
+  const righe = [
+    ['Cliente', data.clienti ? '<a href="clienti.html#' + data.clienti.id + '">' + esc(data.clienti.nome) + '</a>' : ''],
+    ['Stato', esc(data.stato)],
+    ['Immobile', esc([data.indirizzo, data.comune].filter(Boolean).join(', '))],
+    ['Catasto', esc(catasto)],
+    ['Note', esc(data.note || '').replace(/\n/g, '<br>')]
+  ].filter(r => r[1]);
+  $('#dati').innerHTML = righe.map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
+}
+
+async function caricaPratiche() {
+  const { data, error } = await sb.from('pratiche')
+    .select('id, oggetto, protocollo, data_presentazione, tipi_pratica(nome), stati_pratica(nome, chiuso), scadenze(data, fatta, eliminato)')
+    .eq('commessa_id', ID).eq('eliminato', false).order('creato_il');
+  if (error) { mostraErrore(error); return; }
+  const el = $('#pratiche');
+  if (!data.length) { el.innerHTML = '<div class="vuoto">Nessuna pratica in questa commessa.</div>'; return; }
+  el.innerHTML = data.map(p => {
+    const prossima = (p.scadenze || []).filter(s => !s.fatta && !s.eliminato).map(s => s.data).sort()[0];
+    return '<a class="card" href="pratica.html?id=' + p.id + '">' +
+      '<div class="riga"><b>' + esc(p.tipi_pratica ? p.tipi_pratica.nome : 'Pratica') + '</b><span class="badge">' + esc(p.stati_pratica.nome) + '</span></div>' +
+      '<div>' + esc(p.oggetto) + '</div>' +
+      '<div class="piccolo">' + [p.protocollo && 'Prot. ' + esc(p.protocollo), p.data_presentazione && 'presentata il ' + fmtData(p.data_presentazione),
+        prossima && 'prossima scadenza <span class="' + classeData(prossima) + '">' + fmtData(prossima) + '</span>'].filter(Boolean).join(' &middot; ') + '</div></a>';
+  }).join('');
+}
+
+async function caricaScadenzeCommessa() {
+  const lista = await caricaScadenze({ commessa_id: ID });
+  const el = $('#scadenze');
+  if (!lista.length) { el.innerHTML = '<div class="piccolo">Nessuna scadenza.</div>'; return; }
+  // Prima le aperte (per data), poi le fatte
+  lista.sort((a, b) => (a.fatta - b.fatta) || a.data.localeCompare(b.data));
+  el.innerHTML = lista.map(s => rigaScadenza(s, { commessa: false })).join('<hr style="border:0;border-top:1px solid var(--tenue);margin:4px 0">');
+}
+
+(async function () {
+  if (!await avvia('commesse')) return;
+  if (!ID) { location.replace('commesse.html'); return; }
+  await caricaCommessa();
+  if (!commessa) return;
+  caricaPratiche();
+  caricaScadenzeCommessa();
+  $('#b-modifica').addEventListener('click', () => apriFormCommessa(commessa, () => { caricaCommessa(); caricaScadenzeCommessa(); }));
+  $('#b-pratica').addEventListener('click', () => apriFormPratica(null, ID, id => { location.href = 'pratica.html?id=' + id; }));
+  $('#b-scadenza').addEventListener('click', () => apriNuovaScadenza({ commessa_id: ID }, () => { caricaScadenzeCommessa(); caricaPratiche(); }));
+  collegaSpunte($('#scadenze'), () => { caricaScadenzeCommessa(); caricaPratiche(); });
+})();
+</script>
+</body>
+</html>

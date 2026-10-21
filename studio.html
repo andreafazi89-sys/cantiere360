@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+</head>
+<body>
+<header class="testata">
+  <div class="kicker" id="utente">&nbsp;</div>
+  <h1 id="nome-studio">Studio</h1>
+</header>
+
+<main class="contenuto">
+  <div class="sezione"><span>Dati dello studio</span></div>
+  <form class="card modulo" id="f-studio">
+    <label class="campo">Nome<input name="nome" required maxlength="120"></label>
+    <div class="griglia">
+      <label class="campo">Partita IVA<input name="partita_iva" maxlength="20"></label>
+      <label class="campo">Telefono<input name="telefono" type="tel" maxlength="40"></label>
+    </div>
+    <label class="campo">Email<input name="email" type="email" maxlength="200"></label>
+    <label class="campo">Indirizzo<input name="indirizzo" maxlength="200"></label>
+    <div><button type="submit" class="btn">Salva dati</button></div>
+    <div class="piccolo nascosto" id="solo-titolare">Solo il titolare pu&ograve; modificare i dati dello studio.</div>
+  </form>
+
+  <div class="sezione"><span>Persone</span></div>
+  <div class="card" id="membri"></div>
+  <div class="piccolo" style="margin-top:8px">L'invito dei collaboratori arriva con il prossimo aggiornamento.</div>
+
+  <div class="sezione"><span>Tipi di pratica</span></div>
+  <div class="card" id="tipi"></div>
+
+  <div class="sezione"><span>Stati delle pratiche</span></div>
+  <div class="card" id="stati"></div>
+
+  <div class="sezione"><span>Account</span></div>
+  <div class="card"><div><button type="button" class="btn2" id="b-esci">Esci</button></div></div>
+</main>
+
+<script>
+// Liste modificabili: tipi_pratica e stati_pratica. Non si cancellano: si disattivano.
+async function disegnaLista(tabella, contenitore) {
+  const { data, error } = await sb.from(tabella).select('id, nome, ordine, attivo').order('ordine');
+  if (error) { mostraErrore(error); return; }
+  const el = $(contenitore);
+  el.innerHTML = data.map(r =>
+    '<div class="riga"><span' + (r.attivo ? '' : ' style="color:var(--testo3);text-decoration:line-through"') + '>' + esc(r.nome) + '</span>' +
+    '<span><button type="button" class="btn-link" data-rinomina="' + r.id + '">Rinomina</button> ' +
+    '<button type="button" class="btn-link" data-attiva="' + r.id + '" data-valore="' + (!r.attivo) + '">' + (r.attivo ? 'Disattiva' : 'Riattiva') + '</button></span></div>'
+  ).join('') +
+    '<form class="riga" data-nuovo style="margin-top:8px"><label class="campo" style="flex:1;min-width:160px"><span class="nascosto">Nuova voce</span><input name="nome" required maxlength="80" placeholder="Nuova voce"></label>' +
+    '<button type="submit" class="btn2">Aggiungi</button></form>';
+
+  el.onclick = async e => {
+    const idR = e.target.dataset.rinomina, idA = e.target.dataset.attiva;
+    if (idR) {
+      const r = data.find(x => x.id === idR);
+      const nome = prompt('Nuovo nome', r.nome);
+      if (!nome || !nome.trim() || nome.trim() === r.nome) return;
+      const { error } = await sb.from(tabella).update({ nome: nome.trim() }).eq('id', idR);
+      if (error) { mostraErrore(error); return; }
+      disegnaLista(tabella, contenitore);
+    } else if (idA) {
+      const { error } = await sb.from(tabella).update({ attivo: e.target.dataset.valore === 'true' }).eq('id', idA);
+      if (error) { mostraErrore(error); return; }
+      disegnaLista(tabella, contenitore);
+    }
+  };
+  el.querySelector('[data-nuovo]').onsubmit = async e => {
+    e.preventDefault();
+    const nome = e.target.elements.nome.value.trim();
+    const ordine = data.reduce((m, r) => Math.max(m, r.ordine), 0) + 1;
+    const { error } = await sb.from(tabella).insert({ studio_id: C360.studio.id, nome, ordine });
+    if (error) { mostraErrore(/duplicate/i.test(error.message) ? 'voce già presente' : error); return; }
+    disegnaLista(tabella, contenitore);
+  };
+}
+
+(async function () {
+  if (!await avvia('studio')) return;
+  const titolare = C360.membro.ruolo === 'titolare';
+  $('#utente').textContent = (C360.membro.nome || C360.utente.email) + ' · ' + C360.membro.ruolo;
+  $('#nome-studio').textContent = C360.studio.nome;
+
+  const { data: studio } = await sb.from('studi').select('*').eq('id', C360.studio.id).single();
+  const f = $('#f-studio');
+  riempiForm(f, studio);
+  if (!titolare) {
+    [...f.elements].forEach(x => x.disabled = true);
+    $('#solo-titolare').classList.remove('nascosto');
+  }
+  f.addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = datiForm(f);
+    const { error } = await sb.from('studi').update(v).eq('id', C360.studio.id);
+    if (error) { mostraErrore(error); return; }
+    $('#nome-studio').textContent = v.nome;
+    toast('Dati salvati');
+  });
+
+  const { data: membri } = await sb.from('membri').select('nome, ruolo, attivo, utente_id').order('ruolo', { ascending: false });
+  $('#membri').innerHTML = (membri || []).map(m =>
+    '<div class="riga"><span>' + esc(m.nome || 'Senza nome') + (m.utente_id === C360.utente.id ? ' (tu)' : '') + '</span>' +
+    '<span class="badge">' + esc(m.ruolo) + (m.attivo ? '' : ', non attivo') + '</span></div>').join('');
+
+  disegnaLista('tipi_pratica', '#tipi');
+  disegnaLista('stati_pratica', '#stati');
+  $('#b-esci').addEventListener('click', esci);
+})();
+</script>
+</body>
+</html>

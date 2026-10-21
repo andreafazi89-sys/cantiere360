@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<style>
+.accesso{max-width:440px;margin:0 auto;padding:24px 16px 48px}
+.intro{background:var(--scuro);color:#fff;padding:40px 16px 28px}
+.intro div{max-width:440px;margin:0 auto}
+.intro h1{margin:0 0 8px;font-size:28px}
+.intro p{margin:0;color:#c9d5e1}
+.accesso h2{margin:0;font-size:20px}
+.sotto{font-size:14px;color:var(--testo3);text-align:center}
+</style>
+</head>
+<body>
+<header class="intro"><div>
+  <h1>Cantiere 360°</h1>
+  <p>Pratiche, scadenze e cantieri del tuo studio, in un posto solo.</p>
+</div></header>
+
+<main class="accesso">
+  <div id="msg" class="nascosto" role="alert"></div>
+
+  <!-- Accedi -->
+  <form id="f-accedi" class="modulo nascosto">
+    <h2>Accedi</h2>
+    <label class="campo">Email<input name="email" type="email" autocomplete="email" required></label>
+    <label class="campo">Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn" type="submit">Accedi</button>
+    <div class="sotto"><button type="button" class="btn-link" data-vai="recupera">Password dimenticata?</button></div>
+    <div class="sotto">Non hai un account? <button type="button" class="btn-link" data-vai="registra">Crea il tuo studio</button></div>
+  </form>
+
+  <!-- Registrazione -->
+  <form id="f-registra" class="modulo nascosto">
+    <h2>Crea il tuo studio</h2>
+    <label class="campo">Nome dello studio<input name="nome_studio" required maxlength="120"></label>
+    <label class="campo">Il tuo nome<input name="nome" autocomplete="name" required maxlength="120"></label>
+    <label class="campo">Email<input name="email" type="email" autocomplete="email" required></label>
+    <label class="campo">Password (almeno 8 caratteri)<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+    <button class="btn" type="submit">Crea studio e inizia</button>
+    <div class="avviso">Lo studio parte vuoto. I collaboratori li potrai invitare dopo, da Studio.</div>
+    <div class="sotto">Hai gi&agrave; un account? <button type="button" class="btn-link" data-vai="accedi">Accedi</button></div>
+  </form>
+
+  <!-- Crea studio (utente gia' registrato senza studio) -->
+  <form id="f-crea" class="modulo nascosto">
+    <h2>Crea il tuo studio</h2>
+    <p class="piccolo">Sei entrato come <b id="crea-email"></b>. Manca solo lo studio.</p>
+    <label class="campo">Nome dello studio<input name="nome_studio" required maxlength="120"></label>
+    <label class="campo">Il tuo nome<input name="nome" required maxlength="120"></label>
+    <button class="btn" type="submit">Crea studio</button>
+    <div class="sotto"><button type="button" class="btn-link" id="b-esci">Esci</button></div>
+  </form>
+
+  <!-- Recupero password -->
+  <form id="f-recupera" class="modulo nascosto">
+    <h2>Recupera la password</h2>
+    <label class="campo">Email<input name="email" type="email" autocomplete="email" required></label>
+    <button class="btn" type="submit">Invia il link</button>
+    <div class="sotto"><button type="button" class="btn-link" data-vai="accedi">Torna ad accedi</button></div>
+  </form>
+
+  <!-- Nuova password (dal link email) -->
+  <form id="f-nuova" class="modulo nascosto">
+    <h2>Nuova password</h2>
+    <label class="campo">Nuova password (almeno 8 caratteri)<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+    <button class="btn" type="submit">Salva</button>
+  </form>
+</main>
+
+<script>
+const FORM = ['accedi', 'registra', 'crea', 'recupera', 'nuova'];
+function vai(nome) {
+  FORM.forEach(f => $('#f-' + f).classList.toggle('nascosto', f !== nome));
+  messaggio(null);
+}
+function messaggio(testo, tipo) {
+  const m = $('#msg');
+  if (!testo) { m.className = 'nascosto'; return; }
+  m.className = tipo === 'errore' ? 'errore' : 'avviso';
+  m.style.marginBottom = '16px';
+  m.textContent = testo;
+}
+function traduci(err) {
+  const t = (err && err.message) || String(err);
+  if (/Invalid login credentials/i.test(t)) return 'Email o password non corretti.';
+  if (/Email not confirmed/i.test(t)) return 'Email non ancora confermata: apri il link che ti abbiamo inviato.';
+  if (/already registered/i.test(t)) return 'Questa email ha già un account: accedi.';
+  if (/rate limit/i.test(t)) return 'Troppi tentativi ravvicinati: riprova tra qualche minuto.';
+  if (/appartiene gia/i.test(t)) return 'Questo account ha già uno studio.';
+  return t;
+}
+function occupato(form, si) {
+  const b = form.querySelector('button[type=submit]');
+  if (b) b.disabled = si;
+}
+function urlRitorno() { return location.origin + location.pathname; }
+
+// Dopo il login: se c'e' lo studio si entra, altrimenti si crea
+async function dopoLogin(session) {
+  const { data: membro, error } = await sb.from('membri').select('id').eq('utente_id', session.user.id).maybeSingle();
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  if (membro) { location.replace('scadenze.html'); return; }
+  const meta = session.user.user_metadata || {};
+  const f = $('#f-crea');
+  f.elements.nome_studio.value = meta.nome_studio || '';
+  f.elements.nome.value = meta.nome || '';
+  $('#crea-email').textContent = session.user.email;
+  vai('crea');
+}
+
+async function creaStudio(nomeStudio, nome) {
+  const { error } = await sb.rpc('crea_studio', { p_nome: nomeStudio, p_nome_titolare: nome });
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  location.replace('scadenze.html');
+}
+
+document.querySelectorAll('[data-vai]').forEach(b => b.addEventListener('click', () => vai(b.dataset.vai)));
+$('#b-esci').addEventListener('click', esci);
+
+$('#f-accedi').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target; occupato(f, true);
+  const { data, error } = await sb.auth.signInWithPassword({ email: f.elements.email.value.trim(), password: f.elements.password.value });
+  occupato(f, false);
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  dopoLogin(data.session);
+});
+
+$('#f-registra').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target; occupato(f, true);
+  const nomeStudio = f.elements.nome_studio.value.trim();
+  const nome = f.elements.nome.value.trim();
+  const { data, error } = await sb.auth.signUp({
+    email: f.elements.email.value.trim(),
+    password: f.elements.password.value,
+    options: { data: { nome_studio: nomeStudio, nome: nome }, emailRedirectTo: urlRitorno() }
+  });
+  occupato(f, false);
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  if (data.session) { creaStudio(nomeStudio, nome); return; }
+  vai('accedi');
+  messaggio('Ti abbiamo inviato una email: apri il link per confermare l\'indirizzo, poi accedi. Lo studio "' + nomeStudio + '" verrà creato al primo accesso.');
+});
+
+$('#f-crea').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target; occupato(f, true);
+  await creaStudio(f.elements.nome_studio.value.trim(), f.elements.nome.value.trim());
+  occupato(f, false);
+});
+
+$('#f-recupera').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target; occupato(f, true);
+  const { error } = await sb.auth.resetPasswordForEmail(f.elements.email.value.trim(), { redirectTo: urlRitorno() });
+  occupato(f, false);
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  vai('accedi');
+  messaggio('Se l\'email è registrata, riceverai un link per scegliere una nuova password.');
+});
+
+$('#f-nuova').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target; occupato(f, true);
+  const { data, error } = await sb.auth.updateUser({ password: f.elements.password.value });
+  occupato(f, false);
+  if (error) { messaggio(traduci(error), 'errore'); return; }
+  dopoLogin({ user: data.user });
+});
+
+let inRecupero = false;
+sb.auth.onAuthStateChange((evento) => {
+  if (evento === 'PASSWORD_RECOVERY') { inRecupero = true; vai('nuova'); }
+});
+
+(async function () {
+  const { data: { session } } = await sb.auth.getSession();
+  if (inRecupero) return;
+  if (session) { dopoLogin(session); return; }
+  vai(location.hash === '#registra' ? 'registra' : 'accedi');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+/* Cantiere 360° - stile comune (dall'anteprima approvata) */
+:root{
+  --fondo:#f4f6f8; --carta:#ffffff; --testo:#18222d; --testo2:#3d4a57; --testo3:#56616d;
+  --bordo:#dde2e8; --bordo2:#c5ccd4; --primario:#1d4f7a; --primario2:#143a5b; --scuro:#18222d;
+  --tenue:#eef1f4; --rosso:#a32a12; --arancio:#8a3d00; --verde:#1f5a33;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fondo);color:var(--testo);font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.4}
+a{color:var(--primario)}a:hover{color:var(--primario2)}
+button,input,select,textarea{font-family:inherit;font-size:16px}
+button{cursor:pointer}
+.nascosto{display:none !important}
+
+/* Testata */
+.testata{background:var(--scuro);color:#fff;padding:18px 16px 16px}
+.testata .kicker{font-size:13px;color:#c9d5e1}
+.testata h1{margin:2px 0 0;font-size:22px;font-weight:700}
+.testata > *{max-width:728px;margin-left:auto;margin-right:auto}
+.testata .indietro{display:block;color:#c9d5e1;text-decoration:none;font-size:14px}
+.contenuto{max-width:760px;margin:0 auto;padding:16px 16px 96px}
+
+/* Navigazione in basso */
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--carta);border-top:1px solid var(--bordo);display:flex;z-index:10}
+.nav a{flex:1;text-align:center;padding:12px 4px;font-size:13px;color:var(--testo3);text-decoration:none;min-height:48px}
+.nav a.attivo{color:var(--primario);font-weight:700}
+
+/* Card ed elenchi */
+.card{background:var(--carta);border:1px solid var(--bordo);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;color:var(--testo);text-decoration:none;width:100%;text-align:left}
+a.card:hover,button.card:hover{border-color:var(--primario)}
+.elenco{display:flex;flex-direction:column;gap:10px}
+.sezione{margin:20px 0 8px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--testo3);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.riga{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.piccolo{font-size:13px;color:var(--testo3)}
+.vuoto{padding:24px 16px;text-align:center;color:var(--testo3);background:var(--carta);border:1px dashed var(--bordo2);border-radius:12px}
+
+/* Badge e stati */
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap;background:var(--tenue);color:var(--testo2)}
+.etichetta{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px 2px 6px;border-radius:999px;background:var(--tenue);color:var(--testo2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.etichetta i{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.d-scaduta{color:var(--rosso);font-weight:700}
+.d-vicina{color:var(--arancio);font-weight:700}
+.d-ok{color:var(--testo2);font-weight:600}
+
+/* Riepilogo numeri */
+.contatori{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.contatori div{background:var(--carta);border:1px solid var(--bordo);border-radius:12px;padding:10px 12px}
+.contatori b{display:block;font-size:22px}
+.contatori span{font-size:12px;color:var(--testo3)}
+
+/* Segmentato e filtri */
+.seg{display:flex;background:#e3e7ec;border-radius:10px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;border-radius:8px;padding:10px;font-size:14px;font-weight:600;background:transparent;color:var(--testo2);min-height:44px}
+.seg button.on{background:var(--carta);color:var(--primario);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.filtri{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.filtri select{min-height:40px;flex:1 1 180px;max-width:320px}
+.chip{border:1px solid var(--bordo2);background:var(--carta);border-radius:999px;padding:6px 12px;font-size:14px;min-height:36px;color:var(--testo2)}
+.chip.on{border-color:var(--primario);background:#e3edf7;color:var(--primario);font-weight:600}
+
+/* Scadenza */
+.scad{display:flex;gap:12px;align-items:flex-start}
+.scad .data{flex:0 0 78px;font-size:14px}
+.scad .corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.scad .spunta{flex:0 0 auto}
+.scad.fatta .corpo .testo{text-decoration:line-through;color:var(--testo3)}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--primario)}
+
+/* Gruppo per commessa */
+details.gruppo{background:var(--carta);border:1px solid var(--bordo);border-radius:12px;border-left-width:6px}
+details.gruppo summary{padding:12px 14px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:8px;align-items:center}
+details.gruppo summary::-webkit-details-marker{display:none}
+details.gruppo .dentro{padding:0 14px 12px;display:flex;flex-direction:column;gap:10px}
+details.gruppo .dentro .scad{border-top:1px solid var(--tenue);padding-top:10px}
+
+/* Moduli */
+.modulo{display:flex;flex-direction:column;gap:14px}
+.campo{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--testo2)}
+.campo input,.campo select,.campo textarea{padding:11px 13px;border:1px solid var(--bordo2);border-radius:10px;background:var(--carta);color:var(--testo);min-height:44px;font-weight:400;width:100%}
+.campo textarea{min-height:80px;resize:vertical}
+.griglia{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.btn{background:var(--primario);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-weight:700;min-height:46px}
+.btn:hover{background:var(--primario2)}
+.btn:disabled{opacity:.6;cursor:default}
+.btn2{background:var(--carta);color:var(--primario);border:1px solid var(--bordo2);border-radius:10px;padding:10px 14px;font-weight:600;min-height:44px}
+.btn-link{background:none;border:0;color:var(--primario);font-weight:600;padding:8px 0;min-height:40px}
+.avviso{font-size:14px;background:#e9edf1;border-radius:10px;padding:12px 14px;color:var(--testo2)}
+.errore{font-size:14px;background:#fbe4de;border-radius:10px;padding:12px 14px;color:var(--rosso)}
+
+/* Scheda dati */
+.dati{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:14px}
+.dati dt{color:var(--testo3)}
+.dati dd{margin:0}
+
+/* Finestra */
+dialog{border:0;border-radius:14px;padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgba(24,34,45,.45)}
+dialog .testa{padding:16px;border-bottom:1px solid var(--bordo);display:flex;justify-content:space-between;align-items:center}
+dialog .testa h2{margin:0;font-size:18px}
+dialog form{padding:16px}
+dialog .azioni{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+/* Messaggio rapido */
+#toast{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);background:var(--scuro);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:calc(100vw - 32px)}

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commesse - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/commesse.js"></script>
+</head>
+<body>
+<header class="testata">
+  <div class="kicker" id="nome-studio">&nbsp;</div>
+  <h1>Commesse</h1>
+</header>
+
+<main class="contenuto">
+  <div class="riga">
+    <label class="campo" style="flex:1;min-width:180px"><span class="nascosto">Cerca</span>
+      <input type="search" id="cerca" placeholder="Cerca per codice, titolo, cliente, comune"></label>
+    <button type="button" class="btn" id="b-nuova">+ Nuova commessa</button>
+  </div>
+  <div class="filtri" role="group" aria-label="Stato commessa">
+    <button type="button" class="chip" data-stato="aperte">Attive e sospese</button>
+    <button type="button" class="chip" data-stato="chiusa">Chiuse</button>
+    <button type="button" class="chip" data-stato="tutte">Tutte</button>
+  </div>
+  <div class="sezione" id="conteggio"></div>
+  <div id="elenco" class="elenco"></div>
+</main>
+
+<script>
+const stato = { filtro: leggiPref('comm.stato', 'aperte'), testo: '', tutte: [] };
+
+function disegna() {
+  document.querySelectorAll('[data-stato]').forEach(b => b.classList.toggle('on', b.dataset.stato === stato.filtro));
+  const t = stato.testo.toLowerCase();
+  const lista = stato.tutte.filter(c =>
+    (stato.filtro === 'tutte' || (stato.filtro === 'chiusa' ? c.stato === 'chiusa' : c.stato !== 'chiusa')) &&
+    (!t || [c.codice, c.titolo, c.comune, c.clienti && c.clienti.nome].some(x => x && x.toLowerCase().includes(t))));
+  $('#conteggio').textContent = lista.length + (lista.length === 1 ? ' commessa' : ' commesse');
+  const el = $('#elenco');
+  if (!stato.tutte.length) { el.innerHTML = '<div class="vuoto">Ancora nessuna commessa. Creane una con il pulsante qui sopra.</div>'; return; }
+  if (!lista.length) { el.innerHTML = '<div class="vuoto">Nessuna commessa trovata.</div>'; return; }
+  el.innerHTML = lista.map(c => {
+    const pratiche = (c.pratiche || []).filter(p => !p.eliminato);
+    const aperte = pratiche.filter(p => !(p.stati_pratica && p.stati_pratica.chiuso)).length;
+    const prossima = (c.scadenze || []).filter(s => !s.fatta && !s.eliminato).map(s => s.data).sort()[0];
+    const info = [c.clienti && c.clienti.nome, c.comune].filter(Boolean).map(esc).join(' &middot; ');
+    return '<a class="card" href="commessa.html?id=' + c.id + '" style="border-left:6px solid ' + esc(c.colore) + '">' +
+      '<div class="riga"><b>' + esc(c.codice || '') + '</b>' + (c.stato !== 'attiva' ? '<span class="badge">' + esc(c.stato) + '</span>' : '') + '</div>' +
+      '<div>' + esc(c.titolo) + '</div>' +
+      (info ? '<div class="piccolo">' + info + '</div>' : '') +
+      '<div class="piccolo">' + aperte + (aperte === 1 ? ' pratica aperta' : ' pratiche aperte') +
+      (prossima ? ' &middot; prossima scadenza <span class="' + classeData(prossima) + '">' + fmtData(prossima) + '</span>' : '') + '</div></a>';
+  }).join('');
+}
+
+async function carica() {
+  const { data, error } = await sb.from('commesse')
+    .select('id, codice, titolo, colore, comune, stato, clienti(nome), pratiche!pratiche_studio_id_commessa_id_fkey(id, eliminato, stati_pratica(chiuso)), scadenze(data, fatta, eliminato)')
+    .eq('eliminato', false).order('codice', { ascending: false });
+  if (error) { mostraErrore(error); return; }
+  stato.tutte = data;
+  disegna();
+}
+
+(async function () {
+  if (!await avvia('commesse')) return;
+  $('#nome-studio').textContent = C360.studio.nome;
+  document.querySelectorAll('[data-stato]').forEach(b => b.addEventListener('click', () => {
+    stato.filtro = b.dataset.stato; salvaPref('comm.stato', stato.filtro); disegna();
+  }));
+  $('#cerca').addEventListener('input', e => { stato.testo = e.target.value.trim(); disegna(); });
+  $('#b-nuova').addEventListener('click', () => apriFormCommessa(null, id => { location.href = 'commessa.html?id=' + id; }));
+  carica();
+})();
+</script>
+</body>
+</html>

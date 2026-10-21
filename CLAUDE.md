@@ -6,7 +6,7 @@ Progetto separato da CommessaPro (Pierantoni SRL): repo, database e utenti diver
 
 ## Architettura
 
-- Pagine HTML single-file in root, JS vanilla, supabase-js v2 da CDN (versione esatta nel tag `<script>`). Nessun build, nessun framework, nessun npm.
+- Pagine HTML in root, JS vanilla, supabase-js da CDN jsdelivr con versione esatta (oggi 2.117.3, stessa in tutte le pagine). Codice condiviso in `js/` e `css/`. Nessun build, nessun framework, nessun npm.
 - Hosting: GitHub Pages dal branch `main` (repo pubblico).
 - Backend: Supabase piano Free, regione UE, progetto dedicato `cantiere360` (ref `wblgaanxwirmxsawvnjm`, eu-west-1, creato il 20/10/2026).
 - Nel codice va solo la publishable key (o anon key) di Supabase. Mai service_role, password o token.
@@ -28,15 +28,21 @@ Progetto separato da CommessaPro (Pierantoni SRL): repo, database e utenti diver
 ## Struttura repo
 
 ```
-index.html        login, registrazione, crea il tuo studio
+index.html        login, registrazione, crea il tuo studio, recupero password
+scadenze.html     riepilogo scadenze di tutte le commesse (pagina iniziale)
 commesse.html     elenco commesse
-commessa.html     scheda commessa (pratiche, scadenze, storico)
-scadenze.html     riepilogo scadenze di tutte le commesse
+commessa.html     scheda commessa (dati, pratiche, scadenze)
+pratica.html      scheda pratica (stato, scadenze, storico)
 clienti.html      rubrica
-studio.html       dati studio e collaboratori (solo titolare)
-js/comune.js      client Supabase, sessione, helper condivisi
+studio.html       dati studio, persone, tipi e stati pratica
+css/stile.css     stile comune
+js/comune.js      client Supabase, sessione, date, helper condivisi
+js/scadenze.js    lettura scadenze, riga, spunta, finestra nuova scadenza
+js/commesse.js    finestra commessa
+js/pratiche.js    finestra pratica
 sql/NNN_nome.sql  migrazioni in ordine, mai modificate dopo l'applicazione
-sql/test/         script di test isolamento con due studi finti
+sql/test/         test di isolamento SQL con due studi finti
+test/locale/      ambiente locale (Postgres + PostgREST + auth finta) e prova Playwright
 docs/piano.md     piano e decisioni
 ```
 

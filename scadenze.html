@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scadenze - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/scadenze.js"></script>
+</head>
+<body>
+<header class="testata">
+  <div class="kicker" id="nome-studio">&nbsp;</div>
+  <h1>Scadenze</h1>
+</header>
+
+<main class="contenuto">
+  <div class="contatori" id="contatori" aria-live="polite">
+    <div><b class="d-scaduta" id="n-scadute">0</b><span>scadute</span></div>
+    <div><b class="d-vicina" id="n-sette">0</b><span>entro 7 giorni</span></div>
+    <div><b id="n-trenta">0</b><span>entro 30 giorni</span></div>
+  </div>
+
+  <div style="margin-top:16px" class="seg" role="group" aria-label="Raggruppa">
+    <button type="button" data-vista="data">Per data</button>
+    <button type="button" data-vista="commessa">Per commessa</button>
+  </div>
+
+  <div class="filtri">
+    <button type="button" class="chip" id="f-mie" aria-pressed="false">Solo le mie</button>
+    <select class="chip" id="f-commessa" aria-label="Filtra per commessa"><option value="">Tutte le commesse</option></select>
+    <button type="button" class="chip" id="f-fatte" aria-pressed="false">Mostra fatte</button>
+  </div>
+
+  <div class="sezione"><span id="titolo-elenco"></span><button type="button" class="btn2" id="b-nuova">+ Nuova scadenza</button></div>
+  <div id="elenco" class="elenco"></div>
+</main>
+
+<script>
+const stato = {
+  vista: leggiPref('scad.vista', 'data'),
+  mie: leggiPref('scad.mie', false),
+  commessa: leggiPref('scad.commessa', ''),
+  fatte: leggiPref('scad.fatte', false),
+  tutte: []
+};
+
+function applicaFiltri(lista) {
+  return lista.filter(s =>
+    (!stato.mie || s.responsabile_id === C360.membro.id) &&
+    (!stato.commessa || s.commessa_id === stato.commessa) &&
+    (stato.fatte || !s.fatta));
+}
+
+function contatori(lista) {
+  const aperte = lista.filter(s => !s.fatta);
+  $('#n-scadute').textContent = aperte.filter(s => giorniDa(s.data) < 0).length;
+  $('#n-sette').textContent = aperte.filter(s => { const n = giorniDa(s.data); return n >= 0 && n <= 7; }).length;
+  $('#n-trenta').textContent = aperte.filter(s => { const n = giorniDa(s.data); return n >= 0 && n <= 30; }).length;
+}
+
+// Vista per data: gruppi temporali, etichetta commessa su ogni riga
+function vistaPerData(lista) {
+  const gruppi = [
+    ['Scadute', s => !s.fatta && giorniDa(s.data) < 0],
+    ['Oggi e prossimi 7 giorni', s => !s.fatta && giorniDa(s.data) >= 0 && giorniDa(s.data) <= 7],
+    ['Entro 30 giorni', s => !s.fatta && giorniDa(s.data) > 7 && giorniDa(s.data) <= 30],
+    ['Più avanti', s => !s.fatta && giorniDa(s.data) > 30],
+    ['Fatte di recente', s => s.fatta]
+  ];
+  return gruppi.map(([titolo, f]) => {
+    const g = lista.filter(f);
+    if (!g.length) return '';
+    return '<div class="sezione">' + titolo + ' (' + g.length + ')</div>' +
+      '<div class="card">' + g.map(s => rigaScadenza(s, { commessa: !stato.commessa })).join('<hr style="border:0;border-top:1px solid var(--tenue);margin:4px 0">') + '</div>';
+  }).join('');
+}
+
+// Vista per commessa: un gruppo per commessa, ordinati per scadenza aperta piu' vicina
+function vistaPerCommessa(lista) {
+  const mappa = new Map();
+  lista.forEach(s => {
+    if (!mappa.has(s.commessa_id)) mappa.set(s.commessa_id, { c: s.commesse, voci: [] });
+    mappa.get(s.commessa_id).voci.push(s);
+  });
+  const gruppi = [...mappa.values()].map(g => {
+    const aperte = g.voci.filter(s => !s.fatta);
+    g.prossima = aperte.length ? aperte[0].data : '9999-12-31';
+    g.nAperte = aperte.length;
+    g.nScadute = aperte.filter(s => giorniDa(s.data) < 0).length;
+    return g;
+  }).sort((a, b) => a.prossima.localeCompare(b.prossima));
+
+  return gruppi.map(g => {
+    const aperto = g.nScadute > 0 || (g.nAperte && giorniDa(g.prossima) <= 7) || gruppi.length === 1;
+    const conteggio = g.nAperte + (g.nAperte === 1 ? ' aperta' : ' aperte') +
+      (g.nScadute ? ', <span class="d-scaduta">' + g.nScadute + (g.nScadute === 1 ? ' scaduta' : ' scadute') + '</span>' : '');
+    return '<details class="gruppo" style="border-left-color:' + esc(g.c.colore) + '"' + (aperto ? ' open' : '') + '>' +
+      '<summary><span><b>' + esc(g.c.codice || '') + '</b> ' + esc(g.c.titolo) + '</span><span class="piccolo">' + conteggio + '</span></summary>' +
+      '<div class="dentro">' + g.voci.map(s => rigaScadenza(s, { commessa: false })).join('') +
+      '<a class="piccolo" href="commessa.html?id=' + g.c.id + '">Apri la commessa</a></div></details>';
+  }).join('');
+}
+
+function disegna() {
+  document.querySelectorAll('[data-vista]').forEach(b => b.classList.toggle('on', b.dataset.vista === stato.vista));
+  $('#f-mie').classList.toggle('on', stato.mie); $('#f-mie').setAttribute('aria-pressed', stato.mie);
+  $('#f-fatte').classList.toggle('on', stato.fatte); $('#f-fatte').setAttribute('aria-pressed', stato.fatte);
+  $('#f-commessa').classList.toggle('on', !!stato.commessa);
+
+  const lista = applicaFiltri(stato.tutte);
+  contatori(lista);
+  $('#titolo-elenco').textContent = lista.length + (lista.length === 1 ? ' scadenza' : ' scadenze');
+  const el = $('#elenco');
+  if (!stato.tutte.length) {
+    el.innerHTML = '<div class="vuoto">Nessuna scadenza. Aggiungine una qui sopra, oppure crea prima una <a href="commesse.html">commessa</a>.</div>';
+  } else if (!lista.length) {
+    el.innerHTML = '<div class="vuoto">Nessuna scadenza con questi filtri.</div>';
+  } else {
+    el.innerHTML = stato.vista === 'commessa' ? vistaPerCommessa(lista) : vistaPerData(lista);
+  }
+}
+
+async function carica() {
+  stato.tutte = await caricaScadenze({ fatteGiorni: 30 });
+  // Elenco commesse per il filtro: solo quelle che hanno scadenze
+  const sel = $('#f-commessa');
+  const viste = new Map();
+  stato.tutte.forEach(s => { if (s.commesse) viste.set(s.commessa_id, s.commesse); });
+  if (stato.commessa && !viste.has(stato.commessa)) { stato.commessa = ''; salvaPref('scad.commessa', ''); }
+  sel.innerHTML = '<option value="">Tutte le commesse</option>' + [...viste.values()]
+    .sort((a, b) => (a.codice || a.titolo).localeCompare(b.codice || b.titolo))
+    .map(c => '<option value="' + c.id + '">' + esc((c.codice ? c.codice + ' - ' : '') + c.titolo) + '</option>').join('');
+  sel.value = stato.commessa;
+  disegna();
+}
+
+(async function () {
+  if (!await avvia('scadenze')) return;
+  $('#nome-studio').textContent = C360.studio.nome;
+
+  document.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => {
+    stato.vista = b.dataset.vista; salvaPref('scad.vista', stato.vista); disegna();
+  }));
+  $('#f-mie').addEventListener('click', () => { stato.mie = !stato.mie; salvaPref('scad.mie', stato.mie); disegna(); });
+  $('#f-fatte').addEventListener('click', () => { stato.fatte = !stato.fatte; salvaPref('scad.fatte', stato.fatte); disegna(); });
+  $('#f-commessa').addEventListener('change', e => { stato.commessa = e.target.value; salvaPref('scad.commessa', stato.commessa); disegna(); });
+  $('#b-nuova').addEventListener('click', () => apriNuovaScadenza(stato.commessa ? { commessa_id: stato.commessa } : {}, carica));
+  collegaSpunte($('#elenco'), carica);
+
+  carica();
+})();
+</script>
+</body>
+</html>
