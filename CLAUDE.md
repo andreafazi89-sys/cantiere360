@@ -24,6 +24,8 @@ Progetto separato da CommessaPro (Pierantoni SRL): repo, database e utenti diver
 - Policy tipo su ogni tabella: `studio_id = mio_studio_id()` in select/insert/update.
 - Creazione studio solo tramite RPC `crea_studio(nome)`: crea `studi` + riga `membri` titolare in un'unica transazione.
 - Operazioni riservate al titolare (dati studio, collaboratori) controllate in policy, non solo nella UI.
+- Supabase concede in automatico EXECUTE ad `authenticated` su ogni funzione nuova: nelle migrazioni revocarlo sempre per le funzioni dei trigger e per quelle non pensate per l'API. Le tabelle nuove vanno concesse esplicitamente (`grant`), senza DELETE.
+- Dopo ogni migrazione: test di isolamento (`sql/test/`) e controllo advisor di sicurezza Supabase.
 
 ## Struttura repo
 
