@@ -53,8 +53,19 @@ E' la pagina principale. Le scadenze di commesse diverse si mescolano: va bene, 
 4. `clienti.html`: rubrica
 5. `studio.html`: dati studio e collaboratori (solo titolare)
 
+## Direzione lavori (migrazione 003, ottobre 2026)
+
+Decisioni con Andrea del 24/10/2026:
+- Nella commessa: ditte al lavoro (rubrica ditte dello studio + incarico per commessa), sopralluoghi, SAL.
+- Sopralluogo: data, ora, tipo, responsabile, pratica collegata, presenti, osservazioni, disposizioni generali, posizione GPS; foto (scatto, raffica, galleria), schizzi anche sopra una foto, note vocali; niente meteo e firme.
+- Ogni foto si assegna a una o piu' ditte; il PDF per una ditta contiene solo le sue foto, le disposizioni generali e le sue note.
+- SAL classico per ditta, numerato in automatico; importi (contratto, lavori eseguiti, SAL precedenti, ritenuta % e IVA % inserite a mano) visibili e scrivibili solo dal titolare, controllo nel database.
+- Invio: PDF con pulsanti Email e WhatsApp. Sul telefono si apre la condivisione con il PDF allegato; sul computer il PDF si scarica e si apre la mail o WhatsApp Web con il testo pronto (una pagina web non puo' allegare file a mailto o wa.me).
+- Word con sole foto (griglia 2x2, 8x6 cm), anche filtrato per ditta.
+- Foto ridotte a 1600 px, qualita' 0,75. File mai cancellati dall'app (solo marcati eliminati).
+
 ## Fuori dal primo modulo
-Documenti e tavole, giornale dei lavori e verbali di DL, sopralluoghi con foto, parcelle e incassi, promemoria via email, scadenze calcolate dal tipo di pratica (solo con riferimenti normativi verificati), collegamento con i cantieri delle imprese.
+Documenti e tavole, giornale dei lavori, parcelle e incassi, promemoria via email, scadenze calcolate dal tipo di pratica (solo con riferimenti normativi verificati), collegamento con i cantieri delle imprese.
 
 ## Punti aperti
 - Email di conferma registrazione: il server email integrato di Supabase ha un limite orario basso; per la prova con un solo studio basta, prima di aprire ad altri serve un SMTP proprio (gratuito) o va valutato.

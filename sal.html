@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAL - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/ditte.js"></script>
+<script src="js/allegati.js"></script>
+<script src="js/galleria.js"></script>
+</head>
+<body>
+<header class="testata" id="testata">
+  <a class="indietro" id="link-commessa" href="commesse.html">&larr; Commessa</a>
+  <div class="kicker" id="kicker">&nbsp;</div>
+  <h1 id="titolo">&nbsp;</h1>
+  <div class="salvataggio" id="salvataggio" role="status">&nbsp;</div>
+</header>
+
+<main class="contenuto">
+  <form class="card modulo" id="f-sal" autocomplete="off">
+    <div class="griglia">
+      <label class="campo">Data<input name="data" type="date" required></label>
+      <label class="campo">Avanzamento %<input name="avanzamento" type="number" min="0" max="100" step="0.01" inputmode="decimal"></label>
+    </div>
+    <label class="campo">Lavori eseguiti<textarea name="descrizione" placeholder="Descrivi i lavori eseguiti in questo periodo"></textarea></label>
+    <label class="campo">Note<textarea name="note"></textarea></label>
+  </form>
+
+  <div id="blocco-importi" class="nascosto">
+    <div class="sezione"><span>Importi (solo titolare)</span></div>
+    <form class="card modulo" id="f-importi" autocomplete="off">
+      <div class="piccolo" id="contratto"></div>
+      <div class="griglia">
+        <label class="campo">Lavori eseguiti a oggi (euro)<input name="lavori_eseguiti" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="campo">Gia' nei SAL precedenti (euro)<input name="sal_precedenti" type="number" min="0" step="0.01" inputmode="decimal"></label>
+      </div>
+      <div class="griglia">
+        <label class="campo">Ritenuta %<input name="ritenuta_perc" type="number" min="0" max="100" step="0.01" inputmode="decimal"></label>
+        <label class="campo">IVA %<input name="iva_perc" type="number" min="0" max="100" step="0.01" inputmode="decimal"></label>
+      </div>
+      <div class="importi" id="calcolo"></div>
+      <label class="campo">Note sugli importi<textarea name="note"></textarea></label>
+    </form>
+  </div>
+
+  <div class="sezione"><span>Foto</span></div>
+  <div class="card" id="galleria"></div>
+
+  <div class="sezione"><span>PDF e invio</span></div>
+  <div class="card modulo">
+    <label class="campo">Destinatario<select id="destinatario"><option value="ditta">Ditta</option><option value="cliente">Committente</option></select></label>
+    <label class="riga nascosto" style="justify-content:flex-start;gap:8px" id="riga-con-importi"><input type="checkbox" id="con-importi" checked> Includi gli importi nel PDF</label>
+    <div class="riga" style="justify-content:flex-start">
+      <button type="button" class="btn" id="b-pdf">Prepara PDF</button>
+      <button type="button" class="btn2" id="b-word">Word con sole foto</button>
+    </div>
+    <div id="pronto" class="modulo nascosto">
+      <div class="avviso" id="pronto-testo"></div>
+      <div class="invio">
+        <button type="button" class="btn" id="b-email">Email</button>
+        <button type="button" class="btn" id="b-whatsapp">WhatsApp</button>
+        <button type="button" class="btn2" id="b-scarica">Scarica</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px"><button type="button" class="btn2" id="b-elimina">Elimina SAL</button></div>
+</main>
+
+<script>
+const ID = param('id');
+let sal = null, importi = null, contratto = null, galleria = null, pdfPronto = null;
+
+async function caricaSal() {
+  const { data, error } = await sb.from('sal')
+    .select('*, commesse(id, codice, titolo, colore, comune, indirizzo, clienti(nome, email, telefono)), incarichi(' + SEL_INCARICO + ')')
+    .eq('id', ID).eq('eliminato', false).maybeSingle();
+  if (error) { mostraErrore(error); return; }
+  if (!data) { $('#titolo').textContent = 'SAL non trovato'; return; }
+  sal = data;
+  const c = data.commesse;
+  $('#link-commessa').href = 'commessa.html?id=' + c.id;
+  $('#link-commessa').textContent = '← ' + (c.codice || c.titolo);
+  $('#testata').style.borderBottom = '6px solid ' + c.colore;
+  $('#kicker').textContent = nomeDitta(data.incarichi);
+  $('#titolo').textContent = 'SAL n. ' + data.numero + ' del ' + fmtData(data.data);
+  document.title = 'SAL n. ' + data.numero + ' ' + data.incarichi.ditte.nome + ' - Cantiere 360°';
+}
+
+function salvaAuto(form, salva) {
+  let timer = null, coda = Promise.resolve();
+  // In fila: due salvataggi ravvicinati non partono insieme (il primo degli importi e' un insert)
+  const fai = () => { clearTimeout(timer); timer = null; coda = coda.then(() => salva(datiForm(form))); return coda; };
+  form.addEventListener('input', () => { $('#salvataggio').textContent = 'Salvataggio...'; clearTimeout(timer); timer = setTimeout(fai, 800); });
+  form.addEventListener('change', () => { clearTimeout(timer); fai(); });
+  form.addEventListener('submit', e => e.preventDefault());
+}
+function segnaSalvato(error) {
+  if (error) { $('#salvataggio').textContent = 'Non salvato'; mostraErrore(error); return false; }
+  $('#salvataggio').textContent = 'Salvato alle ' + fmtDataOra(new Date().toISOString()).slice(11);
+  return true;
+}
+
+// Stesse formule delle colonne calcolate del database (importi_sal)
+function calcola(v) {
+  const n = x => Number(x || 0), r2 = x => Math.round(x * 100) / 100;
+  const sal = r2(n(v.lavori_eseguiti) - n(v.sal_precedenti));
+  const ritenuta = r2(sal * n(v.ritenuta_perc) / 100);
+  const imponibile = r2(sal - ritenuta);
+  const iva = r2(imponibile * n(v.iva_perc) / 100);
+  return { importo_sal: sal, ritenuta, imponibile, iva, totale: r2(imponibile + iva) };
+}
+function righeImporti(v) {
+  const k = calcola(v);
+  const righe = [];
+  if (contratto != null) righe.push(['Importo del contratto', euro(contratto)]);
+  righe.push(['Lavori eseguiti a oggi', euro(v.lavori_eseguiti || 0)]);
+  righe.push(['Meno SAL precedenti', euro(v.sal_precedenti || 0)]);
+  righe.push(['Importo di questo SAL', euro(k.importo_sal), true]);
+  if (Number(v.ritenuta_perc)) righe.push(['Ritenuta ' + String(v.ritenuta_perc).replace('.', ',') + '%', '- ' + euro(k.ritenuta)]);
+  righe.push(['Imponibile', euro(k.imponibile)]);
+  if (Number(v.iva_perc)) righe.push(['IVA ' + String(v.iva_perc).replace('.', ',') + '%', euro(k.iva)]);
+  righe.push(['Totale da pagare', euro(k.totale), true]);
+  return righe;
+}
+function disegnaCalcolo() {
+  const v = datiForm($('#f-importi'));
+  $('#calcolo').innerHTML = righeImporti(v).map(r => '<span' + (r[2] ? ' class="tot"' : '') + '>' + esc(r[0]) + '</span><span' + (r[2] ? ' class="tot"' : '') + '>' + esc(r[1]) + '</span>').join('');
+  const quota = contratto ? Number(v.lavori_eseguiti || 0) / contratto * 100 : null;
+  $('#contratto').textContent = contratto != null
+    ? 'Contratto ' + euro(contratto) + (quota != null ? ': eseguito il ' + quota.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%' : '') + '. Il contratto si modifica dalla ditta nella scheda commessa.'
+    : 'Importo del contratto non inserito: si aggiunge dalla ditta nella scheda commessa.';
+}
+
+async function preparaImporti() {
+  if (!sonoTitolare()) return;
+  $('#blocco-importi').classList.remove('nascosto');
+  $('#riga-con-importi').classList.remove('nascosto');
+  const [{ data: imp }, { data: inc }, { data: prec }] = await Promise.all([
+    sb.from('importi_sal').select('*').eq('sal_id', ID).maybeSingle(),
+    sb.from('importi_incarico').select('importo_contratto').eq('incarico_id', sal.incarico_id).maybeSingle(),
+    sb.from('sal').select('id, numero, importi_sal(lavori_eseguiti)').eq('incarico_id', sal.incarico_id).eq('eliminato', false).lt('numero', sal.numero).order('numero', { ascending: false }).limit(1)
+  ]);
+  importi = imp;
+  contratto = inc ? inc.importo_contratto : null;
+  const form = $('#f-importi');
+  if (imp) riempiForm(form, imp);
+  else {
+    // Primo salvataggio: i SAL precedenti partono dai lavori eseguiti dell'ultimo SAL
+    let p = prec && prec[0] && prec[0].importi_sal;
+    if (Array.isArray(p)) p = p[0];
+    riempiForm(form, { sal_precedenti: p ? p.lavori_eseguiti : 0, ritenuta_perc: 0, iva_perc: 0 });
+  }
+  disegnaCalcolo();
+  form.addEventListener('input', disegnaCalcolo);
+  salvaAuto(form, async v => {
+    const riga = { lavori_eseguiti: v.lavori_eseguiti || 0, sal_precedenti: v.sal_precedenti || 0,
+      ritenuta_perc: v.ritenuta_perc || 0, iva_perc: v.iva_perc || 0, note: v.note };
+    // Insert la prima volta, poi update: sal_id e studio_id non sono modificabili
+    const q = importi ? sb.from('importi_sal').update(riga).eq('sal_id', ID)
+      : sb.from('importi_sal').insert(Object.assign({ sal_id: ID, studio_id: C360.studio.id }, riga));
+    const { data, error } = await q.select('*').single();
+    if (segnaSalvato(error)) importi = data;
+  });
+}
+
+function destinatario() {
+  if ($('#destinatario').value === 'cliente') {
+    const cl = sal.commesse.clienti || {};
+    return { nome: cl.nome || 'Committente', email: cl.email, telefono: cl.telefono };
+  }
+  const d = sal.incarichi.ditte;
+  return { nome: d.nome, referente: d.referente, email: d.email, telefono: d.telefono };
+}
+
+(async function () {
+  if (!await avvia('commesse')) return;
+  if (!ID) { location.replace('commesse.html'); return; }
+  await caricaSal();
+  if (!sal) return;
+  const form = $('#f-sal');
+  riempiForm(form, sal);
+  salvaAuto(form, async v => {
+    if (!v.data) { $('#salvataggio').textContent = 'Manca la data'; return; }
+    const { error } = await sb.from('sal').update({ data: v.data, avanzamento: v.avanzamento, descrizione: v.descrizione, note: v.note }).eq('id', ID);
+    if (segnaSalvato(error)) { Object.assign(sal, v); $('#titolo').textContent = 'SAL n. ' + sal.numero + ' del ' + fmtData(sal.data); }
+  });
+  await preparaImporti();
+
+  galleria = creaGalleria({ el: $('#galleria'), cartella: 'commesse/' + sal.commessa_id + '/sal/' + sal.id, rif: { commessa_id: sal.commessa_id, sal_id: sal.id } });
+  await galleria.carica();
+
+  const azzera = () => { pdfPronto = null; $('#pronto').classList.add('nascosto'); };
+  $('#destinatario').addEventListener('change', azzera);
+  $('#con-importi').addEventListener('change', azzera);
+
+  $('#b-pdf').addEventListener('click', async () => {
+    const b = $('#b-pdf'); b.disabled = true; b.textContent = 'Preparazione...';
+    try {
+      const c = sal.commesse, inc = sal.incarichi, dest = destinatario();
+      const conImporti = sonoTitolare() && $('#con-importi').checked;
+      const blob = await creaPdf({
+        titolo: 'Stato avanzamento lavori n. ' + sal.numero,
+        sottotitolo: [c.codice, c.titolo].filter(Boolean).join(' - '),
+        righe: [
+          ['Ditta', nomeDitta(inc)],
+          ['Lavorazioni', inc.lavorazioni],
+          ['Immobile', [c.indirizzo, c.comune].filter(Boolean).join(', ')],
+          ['Committente', c.clienti ? c.clienti.nome : ''],
+          ['Data', fmtData(sal.data)],
+          ['Avanzamento', sal.avanzamento != null ? String(sal.avanzamento).replace('.', ',') + '%' : '']
+        ],
+        sezioni: [{ titolo: 'Lavori eseguiti', testo: sal.descrizione }, { titolo: 'Note', testo: sal.note }],
+        importi: conImporti ? righeImporti(datiForm($('#f-importi'))) : null,
+        foto: galleria.foto().map(a => ({ percorso: a.percorso, didascalia: a.didascalia }))
+      });
+      const nome = nomeFile('SAL-' + sal.numero, inc.ditte.nome, c.codice, sal.data) + '.pdf';
+      pdfPronto = { blob, nome, dest };
+      $('#pronto-testo').textContent = 'PDF pronto: ' + nome + ' per ' + dest.nome + (conImporti ? ', con importi.' : ', senza importi.') +
+        (dest.email || dest.telefono ? '' : ' Email e telefono non sono in rubrica.');
+      $('#pronto').classList.remove('nascosto');
+    } catch (e) { mostraErrore(e); }
+    b.disabled = false; b.textContent = 'Prepara PDF';
+  });
+  const invia = canale => {
+    if (!pdfPronto) return;
+    const d = pdfPronto.dest;
+    const oggetto = 'SAL n. ' + sal.numero + ' - ' + sal.incarichi.ditte.nome + ' - ' + (sal.commesse.codice || sal.commesse.titolo);
+    const testo = (d.referente ? 'Buongiorno ' + d.referente + ',' : 'Buongiorno,') + '\nin allegato lo stato avanzamento lavori n. ' + sal.numero +
+      ' del ' + fmtData(sal.data) + ' (' + sal.commesse.titolo + ').\n\n' + (C360.membro.nome || '') + '\n' + (C360.studio.nome || '');
+    inviaPdf(pdfPronto.blob, pdfPronto.nome, canale, d, oggetto, testo);
+  };
+  $('#b-email').addEventListener('click', () => invia('email'));
+  $('#b-whatsapp').addEventListener('click', () => invia('whatsapp'));
+  $('#b-scarica').addEventListener('click', () => { if (pdfPronto) scaricaFile(pdfPronto.blob, pdfPronto.nome); });
+  $('#b-word').addEventListener('click', async () => {
+    const foto = galleria.foto().map(a => ({ percorso: a.percorso, didascalia: a.didascalia }));
+    if (!foto.length) { toast('Nessuna foto da esportare'); return; }
+    toast('Preparazione Word...');
+    try {
+      const blob = await creaWordFoto('SAL n. ' + sal.numero + ' - ' + sal.incarichi.ditte.nome + ' - ' + sal.commesse.titolo, foto);
+      scaricaFile(blob, nomeFile('Foto-SAL-' + sal.numero, sal.incarichi.ditte.nome, sal.data) + '.docx');
+    } catch (e) { mostraErrore(e); }
+  });
+
+  $('#b-elimina').addEventListener('click', async () => {
+    if (!confirm('Eliminare il SAL n. ' + sal.numero + '? Il numero non verra\' riassegnato.')) return;
+    const { error } = await sb.from('sal').update({ eliminato: true }).eq('id', ID);
+    if (error) { mostraErrore(error); return; }
+    location.href = 'commessa.html?id=' + sal.commessa_id;
+  });
+})();
+</script>
+</body>
+</html>

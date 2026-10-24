@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sopralluogo - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/ditte.js"></script>
+<script src="js/allegati.js"></script>
+<script src="js/galleria.js"></script>
+</head>
+<body>
+<header class="testata" id="testata">
+  <a class="indietro" id="link-commessa" href="commesse.html">&larr; Commessa</a>
+  <div class="kicker" id="kicker">Sopralluogo</div>
+  <h1 id="titolo">&nbsp;</h1>
+  <div class="salvataggio" id="salvataggio" role="status">&nbsp;</div>
+</header>
+
+<main class="contenuto">
+  <form class="card modulo" id="f-sop" autocomplete="off">
+    <div class="griglia">
+      <label class="campo">Data<input name="data" type="date" required></label>
+      <label class="campo">Ora<input name="ora" type="time"></label>
+    </div>
+    <div class="griglia">
+      <label class="campo">Tipo<input name="tipo" list="lista-tipi" maxlength="80"></label>
+      <label class="campo">Responsabile<select name="responsabile_id"></select></label>
+    </div>
+    <datalist id="lista-tipi"><option value="Rilievo stato di fatto"><option value="Visita di direzione lavori"><option value="Verifica"><option value="Altro"></datalist>
+    <label class="campo">Pratica collegata<select name="pratica_id"></select></label>
+    <label class="campo">Oggetto<input name="oggetto" maxlength="200" placeholder="Es. Verifica posa massetti e tracce impianti"></label>
+    <label class="campo">Presenti<textarea name="presenti" placeholder="Es. Arch. Rossi (DL), Sig. Bianchi (falegname), committente"></textarea></label>
+    <label class="campo">Osservazioni<textarea name="osservazioni"></textarea></label>
+    <label class="campo">Disposizioni impartite<textarea name="disposizioni" placeholder="Valgono per tutti; quelle per una sola ditta vanno sotto, nella sua scheda"></textarea></label>
+    <div class="riga">
+      <span class="piccolo" id="posizione">Posizione non registrata</span>
+      <button type="button" class="btn2" id="b-gps">Registra posizione</button>
+    </div>
+  </form>
+
+  <div class="sezione"><span>Foto</span></div>
+  <div class="card" id="galleria"></div>
+
+  <div class="sezione"><span>Note vocali</span><button type="button" class="btn2 registra" id="b-registra">Registra nota vocale</button></div>
+  <div class="card" id="audio"></div>
+
+  <div class="sezione"><span>Ditte</span></div>
+  <div id="ditte" class="elenco"></div>
+
+  <div class="sezione"><span>PDF e invio</span></div>
+  <div class="card modulo">
+    <label class="campo">PDF per<select id="destinatario"></select></label>
+    <div class="piccolo" id="desc-dest"></div>
+    <div class="riga" style="justify-content:flex-start">
+      <button type="button" class="btn" id="b-pdf">Prepara PDF</button>
+      <button type="button" class="btn2" id="b-word">Word con sole foto</button>
+    </div>
+    <div id="pronto" class="modulo nascosto">
+      <div class="avviso" id="pronto-testo"></div>
+      <div class="invio">
+        <button type="button" class="btn" id="b-email">Email</button>
+        <button type="button" class="btn" id="b-whatsapp">WhatsApp</button>
+        <button type="button" class="btn2" id="b-scarica">Scarica</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px"><button type="button" class="btn2" id="b-elimina">Elimina sopralluogo</button></div>
+</main>
+
+<script>
+const ID = param('id');
+let sop = null, incarichi = [], galleria = null, pdfPronto = null;
+
+function cartella() { return 'commesse/' + sop.commessa_id + '/sopralluoghi/' + sop.id; }
+
+async function caricaSopralluogo() {
+  const { data, error } = await sb.from('sopralluoghi')
+    .select('*, commesse(id, codice, titolo, colore, comune, indirizzo, clienti(nome))')
+    .eq('id', ID).eq('eliminato', false).maybeSingle();
+  if (error) { mostraErrore(error); return; }
+  if (!data) { $('#titolo').textContent = 'Sopralluogo non trovato'; return; }
+  sop = data;
+  const c = data.commesse;
+  $('#link-commessa').href = 'commessa.html?id=' + c.id;
+  $('#link-commessa').textContent = '← ' + (c.codice || c.titolo);
+  $('#testata').style.borderBottom = '6px solid ' + c.colore;
+  aggiornaTitolo();
+}
+function aggiornaTitolo() {
+  $('#titolo').textContent = 'Sopralluogo del ' + fmtData(sop.data);
+  $('#kicker').textContent = sop.tipo || 'Sopralluogo';
+  document.title = 'Sopralluogo ' + fmtData(sop.data) + ' - Cantiere 360°';
+}
+
+async function preparaForm() {
+  const form = $('#f-sop');
+  const [{ data: membri }, { data: pratiche }] = await Promise.all([
+    sb.from('membri').select('id, nome').eq('attivo', true).order('nome'),
+    sb.from('pratiche').select('id, oggetto, tipi_pratica(nome)').eq('commessa_id', sop.commessa_id).eq('eliminato', false).order('creato_il')
+  ]);
+  form.elements.responsabile_id.innerHTML = '<option value="">Nessuno</option>' + (membri || []).map(m => '<option value="' + m.id + '">' + esc(m.nome || 'Senza nome') + '</option>').join('');
+  form.elements.pratica_id.innerHTML = '<option value="">Nessuna</option>' + (pratiche || []).map(p => '<option value="' + p.id + '">' + esc((p.tipi_pratica ? p.tipi_pratica.nome + ': ' : '') + p.oggetto) + '</option>').join('');
+  riempiForm(form, Object.assign({}, sop, { ora: sop.ora ? sop.ora.slice(0, 5) : '' }));
+  mostraPosizione();
+
+  // Salvataggio automatico
+  let timer = null;
+  const salva = async () => {
+    clearTimeout(timer); timer = null;
+    const v = datiForm(form);
+    if (!v.data) { $('#salvataggio').textContent = 'Manca la data'; return; }
+    const { error } = await sb.from('sopralluoghi').update(v).eq('id', ID);
+    if (error) { $('#salvataggio').textContent = 'Non salvato'; mostraErrore(error); return; }
+    Object.assign(sop, v);
+    aggiornaTitolo();
+    $('#salvataggio').textContent = 'Salvato alle ' + fmtDataOra(new Date().toISOString()).slice(11);
+  };
+  form.addEventListener('input', () => { $('#salvataggio').textContent = 'Salvataggio...'; clearTimeout(timer); timer = setTimeout(salva, 800); });
+  form.addEventListener('change', () => { clearTimeout(timer); salva(); });
+  form.addEventListener('submit', e => e.preventDefault());
+  window.addEventListener('beforeunload', () => { if (timer) salva(); });
+}
+
+function mostraPosizione() {
+  const el = $('#posizione');
+  if (sop.latitudine == null) { el.textContent = 'Posizione non registrata'; return; }
+  el.innerHTML = '<a href="https://www.google.com/maps?q=' + sop.latitudine + ',' + sop.longitudine + '" target="_blank" rel="noopener">Posizione: ' +
+    Number(sop.latitudine).toFixed(5) + ', ' + Number(sop.longitudine).toFixed(5) + '</a>';
+}
+
+// Note per ogni ditta della commessa
+async function disegnaDitte() {
+  const { data: note } = await sb.from('sopralluogo_ditte').select('incarico_id, note').eq('sopralluogo_id', ID);
+  const perInc = {}; (note || []).forEach(n => { perInc[n.incarico_id] = n.note || ''; });
+  $('#ditte').innerHTML = incarichi.length ? incarichi.map(inc =>
+    '<div class="card" data-inc="' + inc.id + '"><div class="riga"><b>' + esc(nomeDitta(inc)) + '</b>' +
+    '<span class="piccolo">' + galleria.fotoPerDitta(inc.id).length + ' foto</span></div>' +
+    '<label class="campo">Note e disposizioni per questa ditta<textarea data-nota>' + esc(perInc[inc.id] || '') + '</textarea></label></div>'
+  ).join('') : '<div class="vuoto">Nessuna ditta in questa commessa. Aggiungile dalla scheda commessa per mandare a ognuna solo le sue foto.</div>';
+}
+
+function disegnaDestinatari() {
+  const sel = $('#destinatario'), prima = sel.value;
+  sel.innerHTML = '<option value="">Studio: tutto il sopralluogo</option>' +
+    incarichi.map(inc => '<option value="' + inc.id + '">' + esc(nomeDitta(inc)) + '</option>').join('');
+  if ([...sel.options].some(o => o.value === prima)) sel.value = prima;
+  descriviDestinatario();
+}
+function descriviDestinatario() {
+  const inc = incarichi.find(i => i.id === $('#destinatario').value);
+  const nFoto = inc ? galleria.fotoPerDitta(inc.id).length : galleria.foto().length;
+  $('#desc-dest').textContent = inc
+    ? 'Solo le ' + nFoto + ' foto assegnate a questa ditta, le disposizioni generali e le sue note.' + (inc.ditte.email || inc.ditte.telefono ? '' : ' La ditta non ha email ne\' telefono in rubrica.')
+    : 'Tutte le ' + nFoto + ' foto, le disposizioni generali e le note di ogni ditta.';
+  pdfPronto = null; $('#pronto').classList.add('nascosto');
+}
+
+async function datiPdf(inc) {
+  const c = sop.commesse;
+  const { data: note } = await sb.from('sopralluogo_ditte').select('incarico_id, note').eq('sopralluogo_id', ID);
+  const notaDi = id => ((note || []).find(n => n.incarico_id === id) || {}).note;
+  const membro = $('#f-sop').elements.responsabile_id.selectedOptions[0];
+  const pratica = $('#f-sop').elements.pratica_id.selectedOptions[0];
+  const sezioni = [
+    { titolo: 'Presenti', testo: sop.presenti },
+    { titolo: 'Osservazioni', testo: sop.osservazioni },
+    { titolo: 'Disposizioni impartite', testo: sop.disposizioni }
+  ];
+  if (inc) sezioni.push({ titolo: 'Per ' + inc.ditte.nome, testo: notaDi(inc.id) });
+  else incarichi.forEach(i => sezioni.push({ titolo: 'Per ' + nomeDitta(i), testo: notaDi(i.id) }));
+  const foto = (inc ? galleria.fotoPerDitta(inc.id) : galleria.foto()).map(a => ({ percorso: a.percorso, didascalia: a.didascalia }));
+  return {
+    titolo: 'Verbale di sopralluogo del ' + fmtData(sop.data),
+    sottotitolo: [c.codice, c.titolo].filter(Boolean).join(' - '),
+    righe: [
+      ['Destinatario', inc ? nomeDitta(inc) : ''],
+      ['Immobile', [c.indirizzo, c.comune].filter(Boolean).join(', ')],
+      ['Committente', c.clienti ? c.clienti.nome : ''],
+      ['Data e ora', fmtData(sop.data) + (sop.ora ? ' ore ' + String(sop.ora).slice(0, 5) : '')],
+      ['Tipo', sop.tipo],
+      ['Responsabile', membro && membro.value ? membro.textContent : ''],
+      ['Pratica', pratica && pratica.value ? pratica.textContent : ''],
+      ['Oggetto', sop.oggetto]
+    ],
+    sezioni, foto
+  };
+}
+
+(async function () {
+  if (!await avvia('commesse')) return;
+  if (!ID) { location.replace('commesse.html'); return; }
+  await caricaSopralluogo();
+  if (!sop) return;
+  incarichi = await caricaIncarichi(sop.commessa_id);
+  await preparaForm();
+  galleria = creaGalleria({
+    el: $('#galleria'), elAudio: $('#audio'), cartella: cartella(), incarichi,
+    rif: { commessa_id: sop.commessa_id, sopralluogo_id: sop.id },
+    onCambio: () => {
+      document.querySelectorAll('#ditte [data-inc]').forEach(el => { el.querySelector('.piccolo').textContent = galleria.fotoPerDitta(el.dataset.inc).length + ' foto'; });
+      if ($('#destinatario').options.length) descriviDestinatario();
+    }
+  });
+  galleria.collegaRegistra($('#b-registra'));
+  await galleria.carica();
+  await disegnaDitte();
+  disegnaDestinatari();
+
+  $('#ditte').addEventListener('change', async e => {
+    if (!e.target.matches('[data-nota]')) return;
+    const inc = e.target.closest('[data-inc]').dataset.inc;
+    const { error } = await sb.from('sopralluogo_ditte').upsert({ studio_id: C360.studio.id, commessa_id: sop.commessa_id, sopralluogo_id: ID, incarico_id: inc, note: e.target.value.trim() || null }, { onConflict: 'sopralluogo_id,incarico_id' });
+    if (error) { mostraErrore(error); return; }
+    toast('Note per la ditta salvate');
+  });
+
+  $('#b-gps').addEventListener('click', () => {
+    if (!navigator.geolocation) { toast('Posizione non disponibile'); return; }
+    $('#posizione').textContent = 'Ricerca posizione...';
+    navigator.geolocation.getCurrentPosition(async p => {
+      const v = { latitudine: Number(p.coords.latitude.toFixed(6)), longitudine: Number(p.coords.longitude.toFixed(6)) };
+      const { error } = await sb.from('sopralluoghi').update(v).eq('id', ID);
+      if (error) { mostraErrore(error); return; }
+      Object.assign(sop, v); mostraPosizione(); toast('Posizione registrata');
+    }, err => { mostraPosizione(); toast('Posizione non disponibile: ' + err.message); }, { enableHighAccuracy: true, timeout: 15000 });
+  });
+
+  $('#destinatario').addEventListener('change', descriviDestinatario);
+  $('#b-pdf').addEventListener('click', async () => {
+    const inc = incarichi.find(i => i.id === $('#destinatario').value);
+    const b = $('#b-pdf'); b.disabled = true; b.textContent = 'Preparazione...';
+    try {
+      const blob = await creaPdf(await datiPdf(inc));
+      const nome = nomeFile('Sopralluogo', sop.commesse.codice, sop.data, inc && inc.ditte.nome) + '.pdf';
+      pdfPronto = { blob, nome, inc };
+      $('#pronto-testo').textContent = 'PDF pronto: ' + nome + (inc ? ' per ' + inc.ditte.nome : '') + '.';
+      $('#pronto').classList.remove('nascosto');
+    } catch (e) { mostraErrore(e); }
+    b.disabled = false; b.textContent = 'Prepara PDF';
+  });
+  const invia = canale => {
+    if (!pdfPronto) return;
+    const d = pdfPronto.inc ? pdfPronto.inc.ditte : {};
+    const oggetto = 'Sopralluogo del ' + fmtData(sop.data) + ' - ' + (sop.commesse.codice || sop.commesse.titolo);
+    const testo = (d.referente ? 'Buongiorno ' + d.referente + ',' : 'Buongiorno,') + '\nin allegato il verbale del sopralluogo del ' + fmtData(sop.data) +
+      ' (' + sop.commesse.titolo + ')' + (pdfPronto.inc ? ' con le foto che riguardano le vostre lavorazioni.' : '.') + '\n\n' + (C360.membro.nome || '') + '\n' + (C360.studio.nome || '');
+    inviaPdf(pdfPronto.blob, pdfPronto.nome, canale, d, oggetto, testo);
+  };
+  $('#b-email').addEventListener('click', () => invia('email'));
+  $('#b-whatsapp').addEventListener('click', () => invia('whatsapp'));
+  $('#b-scarica').addEventListener('click', () => { if (pdfPronto) scaricaFile(pdfPronto.blob, pdfPronto.nome); });
+  $('#b-word').addEventListener('click', async () => {
+    const inc = incarichi.find(i => i.id === $('#destinatario').value);
+    const foto = (inc ? galleria.fotoPerDitta(inc.id) : galleria.foto()).map(a => ({ percorso: a.percorso, didascalia: a.didascalia }));
+    if (!foto.length) { toast('Nessuna foto da esportare'); return; }
+    toast('Preparazione Word...');
+    try {
+      const blob = await creaWordFoto('Sopralluogo del ' + fmtData(sop.data) + ' - ' + sop.commesse.titolo + (inc ? ' - ' + inc.ditte.nome : ''), foto);
+      scaricaFile(blob, nomeFile('Foto-sopralluogo', sop.commesse.codice, sop.data, inc && inc.ditte.nome) + '.docx');
+    } catch (e) { mostraErrore(e); }
+  });
+
+  $('#b-elimina').addEventListener('click', async () => {
+    if (!confirm('Eliminare questo sopralluogo?')) return;
+    const { error } = await sb.from('sopralluoghi').update({ eliminato: true }).eq('id', ID);
+    if (error) { mostraErrore(error); return; }
+    location.href = 'commessa.html?id=' + sop.commessa_id;
+  });
+})();
+</script>
+</body>
+</html>

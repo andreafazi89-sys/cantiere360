@@ -12,6 +12,8 @@
 <script src="js/scadenze.js"></script>
 <script src="js/commesse.js"></script>
 <script src="js/pratiche.js"></script>
+<script src="js/ditte.js"></script>
+<script src="js/allegati.js"></script>
 </head>
 <body>
 <header class="testata" id="testata">
@@ -32,9 +34,27 @@
   <div class="sezione"><span>Scadenze</span><button type="button" class="btn2" id="b-scadenza">+ Scadenza</button></div>
   <div id="scadenze" class="card"></div>
 
+  <div class="sezione"><span>Ditte al lavoro</span><button type="button" class="btn2" id="b-ditta">+ Ditta</button></div>
+  <div id="ditte" class="elenco"></div>
+
+  <div class="sezione"><span>Sopralluoghi</span><button type="button" class="btn2" id="b-sopralluogo">+ Sopralluogo</button></div>
+  <div id="sopralluoghi" class="elenco"></div>
+
+  <div class="sezione"><span>SAL</span><button type="button" class="btn2" id="b-sal">+ SAL</button></div>
+  <div id="sal" class="elenco"></div>
+
   <div class="sezione"><span>Nei prossimi moduli</span></div>
-  <div class="piccolo">Sopralluoghi e foto, direzione lavori, documenti e tavole, parcella.</div>
+  <div class="piccolo">Giornale dei lavori, documenti e tavole, parcella.</div>
 </main>
+
+<dialog id="dlg-nuovo-sal">
+  <div class="testa"><h2>Nuovo SAL</h2><button type="button" class="btn-link" data-chiudi>Chiudi</button></div>
+  <form class="modulo" method="dialog">
+    <label class="campo">Ditta<select name="incarico_id" required></select></label>
+    <div class="piccolo">Il numero del SAL si assegna da solo: progressivo per ogni ditta.</div>
+    <div class="azioni"><button type="submit" class="btn">Crea SAL</button></div>
+  </form>
+</dialog>
 
 <script>
 const ID = param('id');
@@ -86,6 +106,54 @@ async function caricaScadenzeCommessa() {
   el.innerHTML = lista.map(s => rigaScadenza(s, { commessa: false })).join('<hr style="border:0;border-top:1px solid var(--tenue);margin:4px 0">');
 }
 
+let incarichi = [], importiInc = {};
+
+async function caricaDitte() {
+  incarichi = await caricaIncarichi(ID);
+  importiInc = await caricaImportiIncarichi(incarichi.map(i => i.id));
+  const el = $('#ditte');
+  if (!incarichi.length) { el.innerHTML = '<div class="vuoto">Nessuna ditta. Aggiungi le ditte per assegnare loro foto e SAL.</div>'; return; }
+  el.innerHTML = incarichi.map(i => {
+    const d = i.ditte;
+    return '<button type="button" class="card" data-inc="' + i.id + '">' +
+      '<div class="riga"><b>' + esc(d.nome) + '</b>' + (d.mestiere ? '<span class="badge">' + esc(d.mestiere) + '</span>' : '') + '</div>' +
+      (i.lavorazioni ? '<div>' + esc(i.lavorazioni) + '</div>' : '') +
+      '<div class="piccolo">' + [d.referente && esc(d.referente), d.telefono && esc(d.telefono), d.email && esc(d.email),
+        importiInc[i.id] != null && 'contratto ' + euro(importiInc[i.id])].filter(Boolean).join(' &middot; ') + '</div></button>';
+  }).join('');
+}
+
+async function caricaSopralluoghi() {
+  const { data, error } = await sb.from('sopralluoghi').select('id, data, ora, tipo, oggetto, allegati(id, tipo, eliminato)')
+    .eq('commessa_id', ID).eq('eliminato', false).order('data', { ascending: false }).order('creato_il', { ascending: false });
+  if (error) { mostraErrore(error); return; }
+  const el = $('#sopralluoghi');
+  if (!data.length) { el.innerHTML = '<div class="vuoto">Nessun sopralluogo.</div>'; return; }
+  el.innerHTML = data.map(s => {
+    const nFoto = (s.allegati || []).filter(a => !a.eliminato && a.tipo !== 'audio').length;
+    return '<a class="card" href="sopralluogo.html?id=' + s.id + '">' +
+      '<div class="riga"><b>' + fmtData(s.data) + (s.ora ? ' ore ' + s.ora.slice(0, 5) : '') + '</b>' + (s.tipo ? '<span class="badge">' + esc(s.tipo) + '</span>' : '') + '</div>' +
+      (s.oggetto ? '<div>' + esc(s.oggetto) + '</div>' : '') +
+      '<div class="piccolo">' + nFoto + ' foto</div></a>';
+  }).join('');
+}
+
+async function caricaSal() {
+  const { data, error } = await sb.from('sal').select('id, numero, data, avanzamento, incarico_id, importi_sal(importo_sal, totale)')
+    .eq('commessa_id', ID).eq('eliminato', false).order('data', { ascending: false }).order('numero', { ascending: false });
+  if (error) { mostraErrore(error); return; }
+  const el = $('#sal');
+  if (!data.length) { el.innerHTML = '<div class="vuoto">Nessun SAL.</div>'; return; }
+  const ditta = id => { const i = incarichi.find(x => x.id === id); return i ? i.ditte.nome : 'Ditta tolta dalla commessa'; };
+  el.innerHTML = data.map(s => {
+    const imp = Array.isArray(s.importi_sal) ? s.importi_sal[0] : s.importi_sal;
+    return '<a class="card" href="sal.html?id=' + s.id + '">' +
+      '<div class="riga"><b>SAL n. ' + s.numero + ' &middot; ' + esc(ditta(s.incarico_id)) + '</b>' +
+      (s.avanzamento != null ? '<span class="badge">' + String(s.avanzamento).replace('.', ',') + '%</span>' : '') + '</div>' +
+      '<div class="piccolo">' + fmtData(s.data) + (imp ? ' &middot; importo ' + euro(imp.importo_sal) + ' &middot; totale ' + euro(imp.totale) : '') + '</div></a>';
+  }).join('');
+}
+
 (async function () {
   if (!await avvia('commesse')) return;
   if (!ID) { location.replace('commesse.html'); return; }
@@ -97,6 +165,38 @@ async function caricaScadenzeCommessa() {
   $('#b-pratica').addEventListener('click', () => apriFormPratica(null, ID, id => { location.href = 'pratica.html?id=' + id; }));
   $('#b-scadenza').addEventListener('click', () => apriNuovaScadenza({ commessa_id: ID }, () => { caricaScadenzeCommessa(); caricaPratiche(); }));
   collegaSpunte($('#scadenze'), () => { caricaScadenzeCommessa(); caricaPratiche(); });
+
+  await caricaDitte();
+  caricaSopralluoghi();
+  caricaSal();
+  $('#b-ditta').addEventListener('click', () => apriFormDitta(null, ID, null, () => { caricaDitte(); }));
+  $('#ditte').addEventListener('click', e => {
+    const b = e.target.closest('[data-inc]'); if (!b) return;
+    const inc = incarichi.find(i => i.id === b.dataset.inc);
+    apriFormDitta(inc, ID, importiInc[inc.id], () => { caricaDitte().then(caricaSal); });
+  });
+  $('#b-sopralluogo').addEventListener('click', async () => {
+    const ora = new Date();
+    const { data, error } = await sb.from('sopralluoghi').insert({
+      studio_id: C360.studio.id, commessa_id: ID, data: oggiISO(), responsabile_id: C360.membro.id,
+      ora: String(ora.getHours()).padStart(2, '0') + ':' + String(ora.getMinutes()).padStart(2, '0')
+    }).select('id').single();
+    if (error) { mostraErrore(error); return; }
+    location.href = 'sopralluogo.html?id=' + data.id;
+  });
+  const dSal = $('#dlg-nuovo-sal');
+  dSal.querySelector('[data-chiudi]').addEventListener('click', () => dSal.close());
+  $('#b-sal').addEventListener('click', () => {
+    if (!incarichi.length) { toast('Prima aggiungi una ditta alla commessa'); return; }
+    dSal.querySelector('select').innerHTML = incarichi.map(i => '<option value="' + i.id + '">' + esc(nomeDitta(i)) + '</option>').join('');
+    dSal.showModal();
+  });
+  dSal.querySelector('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const { data, error } = await sb.from('sal').insert({ studio_id: C360.studio.id, commessa_id: ID, incarico_id: e.target.elements.incarico_id.value, data: oggiISO() }).select('id').single();
+    if (error) { mostraErrore(error); return; }
+    location.href = 'sal.html?id=' + data.id;
+  });
 })();
 </script>
 </body>
