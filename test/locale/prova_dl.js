@@ -50,11 +50,18 @@ async function accedi(page, email) {
   await page.click('#f-accedi button[type=submit]');
   await page.waitForURL('**/scadenze.html');
 }
-async function aggiungiDitta(a, campi) {
+// Ditta in commessa: scelta dalla rubrica; con nuova:{...} la crea in rubrica dalla finestra stessa
+async function aggiungiDitta(a, ditta, campi = {}, nuova = null) {
   await a.click('#b-ditta');
   const d = a.locator('#dlg-ditta');
-  if (campi.daRubrica) await d.locator('[name=ditta_id]').selectOption({ label: campi.daRubrica });
-  for (const [k, v] of Object.entries(campi)) if (k !== 'daRubrica') await d.locator('[name=' + k + ']').fill(v);
+  if (nuova) {
+    await d.locator('[data-nuova]').click();
+    const r = a.locator('#dlg-rubrica-ditta');
+    for (const [k, v] of Object.entries(nuova)) await r.locator('[name=' + k + ']').fill(v);
+    await r.locator('button[type=submit]').click();
+    await a.waitForFunction(() => document.querySelector('#dlg-ditta [name=ditta_id]').value !== '');
+  } else await d.locator('[name=ditta_id]').selectOption({ label: ditta });
+  for (const [k, v] of Object.entries(campi)) await d.locator('[name=' + k + ']').fill(v);
   const n = await a.locator('#ditte .card').count();
   await d.locator('button[type=submit]').click();
   await a.waitForFunction(n => document.querySelectorAll('#ditte .card').length === n + 1, n);
@@ -93,8 +100,20 @@ const fotoNelPdf = f => (execSync('pdfimages -list ' + JSON.stringify(f)).toStri
   await a.waitForSelector('#ditte .vuoto');
 
   // ===== Ditte =====
-  await aggiungiDitta(a, { nome: 'Falegnameria Bianchi', mestiere: 'Falegname', referente: 'Mario', telefono: '333 1234567', email: 'falegname@prova.invalid', lavorazioni: 'Porte interne e armadio', importo_contratto: '12000' });
-  await aggiungiDitta(a, { nome: 'Pittore Verdi', mestiere: 'Pittore', telefono: '+39 347 7654321' });
+  // Rubrica ditte, fuori dalle commesse
+  await a.click('nav >> text=Ditte');
+  await a.waitForSelector('#elenco .vuoto');
+  await a.click('#b-nuova');
+  const r = a.locator('#dlg-rubrica-ditta');
+  for (const [k, v] of Object.entries({ nome: 'Falegnameria Bianchi', mestiere: 'Falegname', referente: 'Mario', telefono: '333 1234567', email: 'falegname@prova.invalid' })) await r.locator('[name=' + k + ']').fill(v);
+  await r.locator('button[type=submit]').click();
+  await a.waitForSelector('#elenco .card');
+  ok((await a.textContent('#elenco')).includes('Nessuna commessa'), 'rubrica ditte: ditta creata fuori dalle commesse');
+  await a.goto(BASE + 'commessa.html?id=' + idCommessa);
+  await a.waitForSelector('#ditte .vuoto');
+  await aggiungiDitta(a, 'Falegnameria Bianchi (Falegname)', { lavorazioni: 'Porte interne e armadio', importo_contratto: '12000' });
+  await aggiungiDitta(a, null, {}, { nome: 'Pittore Verdi', mestiere: 'Pittore', telefono: '+39 347 7654321' });
+  ok((await a.textContent('#ditte')).includes('Pittore Verdi'), 'ditta nuova creata in rubrica dalla commessa e scelta');
   ok((await a.textContent('#ditte')).includes('contratto 12.000,00 euro'), 'il titolare vede il contratto della ditta');
   await foto(a, 'dl-01-commessa-ditte');
 
@@ -250,6 +269,10 @@ const fotoNelPdf = f => (execSync('pdfimages -list ' + JSON.stringify(f)).toStri
   await a.waitForFunction(() => document.querySelectorAll('#sal .card').length === 2);
   ok((await a.textContent('#sal')).includes('totale 3.513,60 euro'), 'elenco SAL con importi per il titolare');
   await foto(a, 'dl-05-commessa-completa');
+  await a.click('nav >> text=Ditte');
+  await a.waitForSelector('#elenco .card');
+  ok((await a.locator('#elenco .card', { hasText: 'Falegnameria' }).textContent()).includes('In 1 commessa'), 'rubrica: la ditta mostra la commessa in cui lavora');
+  await foto(a, 'dl-05b-rubrica-ditte');
 
   // ===== Collaboratore dello stesso studio: niente importi =====
   const c = await nuovaPagina(browser);

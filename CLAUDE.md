@@ -38,14 +38,15 @@ commessa.html     scheda commessa (dati, pratiche, scadenze)
 pratica.html      scheda pratica (stato, scadenze, storico)
 sopralluogo.html  scheda sopralluogo (verbale, foto per ditta, schizzi, note vocali, PDF e invio)
 sal.html          scheda SAL di una ditta (lavori, foto, importi solo titolare, PDF e invio)
-clienti.html      rubrica
+clienti.html      rubrica clienti
+ditte.html        rubrica ditte e artigiani (fuori dalle commesse; nella commessa si sceglie la ditta)
 studio.html       dati studio, persone, tipi e stati pratica
 css/stile.css     stile comune
 js/comune.js      client Supabase, sessione, date, helper condivisi
 js/scadenze.js    lettura scadenze, riga, spunta, finestra nuova scadenza
 js/commesse.js    finestra commessa
 js/pratiche.js    finestra pratica
-js/ditte.js       ditte in commessa (incarichi) e rubrica ditte
+js/ditte.js       rubrica ditte e ditte in commessa (incarichi)
 js/allegati.js    caricamento file, link firmati, fotocamera, schizzo, note vocali, PDF (jsPDF), Word (docx), invio
 js/galleria.js    pannello foto e note vocali di sopralluogo e SAL
 sql/NNN_nome.sql  migrazioni in ordine, mai modificate dopo l'applicazione

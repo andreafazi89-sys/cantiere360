@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ditte - Cantiere 360°</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/stile.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/ditte.js"></script>
+</head>
+<body>
+<header class="testata">
+  <div class="kicker" id="nome-studio">&nbsp;</div>
+  <h1>Ditte</h1>
+</header>
+
+<main class="contenuto">
+  <div class="riga">
+    <label class="campo" style="flex:1;min-width:180px"><span class="nascosto">Cerca</span>
+      <input type="search" id="cerca" placeholder="Cerca per nome, mestiere, referente, telefono"></label>
+    <button type="button" class="btn" id="b-nuova">+ Nuova ditta</button>
+  </div>
+  <div class="filtri" id="mestieri"></div>
+  <div class="sezione" id="conteggio"></div>
+  <div id="elenco" class="elenco"></div>
+</main>
+
+<script>
+let tutte = [], testo = '', mestiere = '';
+
+function commesseAttive(d) { return (d.incarichi || []).filter(i => !i.eliminato && i.commesse && !i.commesse.eliminato); }
+
+function disegna() {
+  const t = testo.toLowerCase();
+  const lista = tutte.filter(d => (!mestiere || (d.mestiere || '') === mestiere) &&
+    (!t || [d.nome, d.mestiere, d.referente, d.telefono, d.email, d.cf_piva].some(x => x && x.toLowerCase().includes(t))));
+  $('#conteggio').textContent = lista.length + (lista.length === 1 ? ' ditta' : ' ditte');
+  const el = $('#elenco');
+  if (!tutte.length) { el.innerHTML = '<div class="vuoto">Rubrica vuota. Aggiungi le ditte con cui lavori: poi nelle commesse basta sceglierle.</div>'; return; }
+  if (!lista.length) { el.innerHTML = '<div class="vuoto">Nessuna ditta trovata.</div>'; return; }
+  el.innerHTML = lista.map(d => {
+    const comm = commesseAttive(d);
+    return '<button type="button" class="card" data-id="' + d.id + '">' +
+      '<div class="riga"><b>' + esc(d.nome) + '</b>' + (d.mestiere ? '<span class="badge">' + esc(d.mestiere) + '</span>' : '') + '</div>' +
+      '<div class="piccolo">' + [d.referente, d.telefono, d.email].filter(Boolean).map(esc).join(' &middot; ') + '</div>' +
+      '<div class="piccolo">' + (comm.length ? 'In ' + comm.length + (comm.length === 1 ? ' commessa: ' : ' commesse: ') +
+        comm.map(i => esc(i.commesse.codice || i.commesse.titolo)).join(', ') : 'Nessuna commessa') + '</div></button>';
+  }).join('');
+}
+
+function disegnaMestieri() {
+  const m = [...new Set(tutte.map(d => d.mestiere).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  if (mestiere && !m.includes(mestiere)) mestiere = '';
+  $('#mestieri').innerHTML = m.length < 2 ? '' : ['', ...m].map(x =>
+    '<button type="button" class="chip' + (x === mestiere ? ' on' : '') + '" data-mestiere="' + esc(x) + '">' + esc(x || 'Tutti') + '</button>').join('');
+}
+
+async function carica() {
+  const { data, error } = await sb.from('ditte')
+    .select('*, incarichi(id, eliminato, commesse(id, codice, titolo, eliminato))').eq('eliminato', false).order('nome');
+  if (error) { mostraErrore(error); return; }
+  tutte = data;
+  disegnaMestieri();
+  disegna();
+}
+
+(async function () {
+  if (!await avvia('ditte')) return;
+  $('#nome-studio').textContent = C360.studio.nome;
+  $('#cerca').addEventListener('input', e => { testo = e.target.value.trim(); disegna(); });
+  $('#mestieri').addEventListener('click', e => {
+    const b = e.target.closest('[data-mestiere]'); if (!b) return;
+    mestiere = b.dataset.mestiere; disegnaMestieri(); disegna();
+  });
+  $('#b-nuova').addEventListener('click', () => apriFormRubricaDitta(null, carica));
+  $('#elenco').addEventListener('click', e => {
+    const b = e.target.closest('[data-id]');
+    if (b) apriFormRubricaDitta(tutte.find(d => d.id === b.dataset.id), carica);
+  });
+  await carica();
+  const daAprire = location.hash.slice(1);
+  if (daAprire) { const d = tutte.find(x => x.id === daAprire); if (d) apriFormRubricaDitta(d, carica); }
+})();
+</script>
+</body>
+</html>

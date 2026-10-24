@@ -56,7 +56,8 @@ E' la pagina principale. Le scadenze di commesse diverse si mescolano: va bene, 
 ## Direzione lavori (migrazione 003, ottobre 2026)
 
 Decisioni con Andrea del 24/10/2026:
-- Nella commessa: ditte al lavoro (rubrica ditte dello studio + incarico per commessa), sopralluoghi, SAL.
+- Rubrica Ditte a parte (pagina Ditte nel menu): una ditta lavora su piu' commesse anche in periodi diversi. Nella commessa si sceglie la ditta dalla rubrica e si aggiungono solo lavorazioni e contratto; i dati della ditta si modificano solo in rubrica.
+- Nella commessa: ditte al lavoro, sopralluoghi, SAL.
 - Sopralluogo: data, ora, tipo, responsabile, pratica collegata, presenti, osservazioni, disposizioni generali, posizione GPS; foto (scatto, raffica, galleria), schizzi anche sopra una foto, note vocali; niente meteo e firme.
 - Ogni foto si assegna a una o piu' ditte; il PDF per una ditta contiene solo le sue foto, le disposizioni generali e le sue note.
 - SAL classico per ditta, numerato in automatico; importi (contratto, lavori eseguiti, SAL precedenti, ritenuta % e IVA % inserite a mano) visibili e scrivibili solo dal titolare, controllo nel database.
