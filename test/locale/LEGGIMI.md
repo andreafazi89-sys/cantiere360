@@ -14,3 +14,11 @@ Serve: PostgreSQL 16, PostgREST 12 (binario da GitHub releases), Node 22 con `pg
 `prova.js` registra lo studio A, crea cliente, commesse, pratica, scadenze, prova le due viste del riepilogo,
 poi registra lo studio B e verifica che non veda nulla di A (anche aprendo una commessa di A per id).
 Stampa gli errori della console del browser.
+
+`bootstrap.sql` imita anche Supabase Storage (`storage.buckets`, `storage.objects`, `storage.foldername`) e `server.js` risponde
+a caricamento e link firmati applicando le policy di `storage.objects` come utente loggato. Le librerie si prendono da npm
+(`npm pack`), servono anche jsPDF 4.2.1 e docx 9.7.2.
+
+`prova_dl.js` (migrazione 003): ditte in commessa, sopralluogo con foto per ditta, raffica, schizzo, nota vocale (fotocamera e
+microfono finti di Chromium), PDF per ditta e per lo studio, Word, SAL con importi, collaboratore senza importi, studio B senza accesso.
+`SBJS=... JSPDF=... DOCX=... IMG=<cartella con foto1..4.jpg> SHOTS=... OUT=... node test/locale/prova_dl.js`

@@ -37,6 +37,7 @@ function disegnaNav(attiva) {
     ['scadenze', 'Scadenze', 'scadenze.html'],
     ['commesse', 'Commesse', 'commesse.html'],
     ['clienti', 'Clienti', 'clienti.html'],
+    ['ditte', 'Ditte', 'ditte.html'],
     ['studio', 'Studio', 'studio.html']
   ];
   const nav = document.createElement('nav');

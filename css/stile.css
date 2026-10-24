@@ -100,3 +100,33 @@ dialog .azioni{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 
 /* Messaggio rapido */
 #toast{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);background:var(--scuro);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:calc(100vw - 32px)}
+
+/* Direzione lavori: foto, allegati, fotocamera, schizzo */
+.salvataggio{font-size:13px;color:#c9d5e1}
+.foto-azioni{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.foto-azioni .btn2{width:100%}
+.foto-elenco{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.foto{background:var(--carta);border:1px solid var(--bordo);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.foto .img{position:relative;background:var(--tenue);aspect-ratio:4/3}
+.foto img{width:100%;height:100%;object-fit:cover;display:block}
+.foto .num{position:absolute;left:6px;top:6px;background:rgba(24,34,45,.75);color:#fff;font-size:12px;font-weight:700;border-radius:6px;padding:2px 6px}
+.foto .corpo{padding:8px;display:flex;flex-direction:column;gap:6px}
+.foto .corpo input{padding:8px 10px;border:1px solid var(--bordo2);border-radius:8px;font-size:14px;min-height:40px;width:100%}
+.foto .comandi{display:flex;gap:4px;flex-wrap:wrap}
+.foto .comandi button{flex:1;min-width:40px;min-height:40px;border:1px solid var(--bordo2);background:var(--carta);border-radius:8px;font-size:13px;color:var(--testo2)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips .chip{font-size:13px;min-height:34px;padding:4px 10px}
+.audio{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.audio audio{flex:1;min-width:200px;height:40px}
+.registra.attiva{background:#fbe4de;color:var(--rosso);border-color:var(--rosso)}
+.importi{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:15px}
+.importi .tot{font-weight:700;border-top:1px solid var(--bordo);padding-top:6px}
+.importi span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+.invio{display:flex;gap:8px;flex-wrap:wrap}
+.invio .btn{flex:1;min-width:140px}
+.sovra{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+.sovra video,.sovra canvas{flex:1;min-height:0;width:100%;object-fit:contain;touch-action:none;background:#111}
+.sovra .barra{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;background:#000;color:#fff;flex-wrap:wrap}
+.sovra .barra button{min-height:44px;min-width:44px;border-radius:10px;border:1px solid #556;background:#18222d;color:#fff;padding:8px 12px;font-weight:600}
+.sovra .barra button.on{border-color:#fff;outline:2px solid #fff}
+.sovra .scatta{width:72px;height:72px;border-radius:50% !important;background:#fff !important;border:4px solid #889 !important}

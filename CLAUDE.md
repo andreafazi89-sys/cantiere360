@@ -9,6 +9,7 @@ Progetto separato da CommessaPro (Pierantoni SRL): repo, database e utenti diver
 - Pagine HTML in root, JS vanilla, supabase-js da CDN jsdelivr con versione esatta (oggi 2.117.3, stessa in tutte le pagine). Codice condiviso in `js/` e `css/`. Nessun build, nessun framework, nessun npm.
 - Hosting: GitHub Pages dal branch `main` (repo pubblico).
 - Backend: Supabase piano Free, regione UE, progetto dedicato `cantiere360` (ref `wblgaanxwirmxsawvnjm`, eu-west-1, creato il 20/10/2026).
+- Librerie caricate solo quando servono, versione esatta da jsdelivr: jsPDF 4.2.1 (PDF), docx 9.7.2 (Word).
 - Nel codice va solo la publishable key (o anon key) di Supabase. Mai service_role, password o token.
 
 ### Modello dati
@@ -35,13 +36,19 @@ scadenze.html     riepilogo scadenze di tutte le commesse (pagina iniziale)
 commesse.html     elenco commesse
 commessa.html     scheda commessa (dati, pratiche, scadenze)
 pratica.html      scheda pratica (stato, scadenze, storico)
-clienti.html      rubrica
+sopralluogo.html  scheda sopralluogo (verbale, foto per ditta, schizzi, note vocali, PDF e invio)
+sal.html          scheda SAL di una ditta (lavori, foto, importi solo titolare, PDF e invio)
+clienti.html      rubrica clienti
+ditte.html        rubrica ditte e artigiani (fuori dalle commesse; nella commessa si sceglie la ditta)
 studio.html       dati studio, persone, tipi e stati pratica
 css/stile.css     stile comune
 js/comune.js      client Supabase, sessione, date, helper condivisi
 js/scadenze.js    lettura scadenze, riga, spunta, finestra nuova scadenza
 js/commesse.js    finestra commessa
 js/pratiche.js    finestra pratica
+js/ditte.js       rubrica ditte e ditte in commessa (incarichi)
+js/allegati.js    caricamento file, link firmati, fotocamera, schizzo, note vocali, PDF (jsPDF), Word (docx), invio
+js/galleria.js    pannello foto e note vocali di sopralluogo e SAL
 sql/NNN_nome.sql  migrazioni in ordine, mai modificate dopo l'applicazione
 sql/test/         test di isolamento SQL con due studi finti
 test/locale/      ambiente locale (Postgres + PostgREST + auth finta) e prova Playwright
