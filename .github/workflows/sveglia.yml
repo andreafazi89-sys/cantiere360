@@ -1,0 +1,32 @@
+# Tiene attivo il progetto Supabase (piano Free: pausa dopo 7 giorni con poca attivita' sul database).
+# Due volte al giorno chiama la funzione public.sveglia() (migrazione 004), che risponde solo "ok"
+# e non legge dati. Usa la publishable key, la stessa gia' pubblica in js/comune.js: nessun segreto.
+# Se la chiamata fallisce (es. progetto gia' in pausa) il workflow risulta rosso e GitHub manda una email.
+name: Sveglia Supabase
+
+on:
+  schedule:
+    - cron: '17 6,18 * * *'   # 06:17 e 18:17 UTC
+  workflow_dispatch:           # avvio a mano dalla scheda Actions
+
+permissions: {}
+
+jobs:
+  sveglia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: https://wblgaanxwirmxsawvnjm.supabase.co
+      SUPABASE_KEY: sb_publishable_0WbVyyOMiYrVHw7KWGI-Gg_S1NwIeNB
+    steps:
+      - name: Chiama sveglia()
+        run: |
+          for i in 1 2 3; do
+            risposta=$(curl -sS --max-time 30 -X POST "$SUPABASE_URL/rest/v1/rpc/sveglia" \
+              -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" -d '{}') || risposta=""
+            echo "Tentativo $i: $risposta"
+            if [ "$risposta" = '"ok"' ]; then exit 0; fi
+            sleep 20
+          done
+          echo "::error::Supabase non risponde: controllare se il progetto e' in pausa"
+          exit 1
