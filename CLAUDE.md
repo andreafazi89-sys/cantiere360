@@ -49,6 +49,7 @@ js/pratiche.js    finestra pratica
 js/ditte.js       rubrica ditte e ditte in commessa (incarichi)
 js/allegati.js    caricamento file, link firmati, fotocamera, schizzo, note vocali, PDF (jsPDF), Word (docx), invio
 js/galleria.js    pannello foto e note vocali di sopralluogo e SAL
+sql/004_sveglia.sql + .github/workflows/sveglia.yml  sveglia anti-pausa Free (2 volte al giorno, solo 'ok')
 sql/NNN_nome.sql  migrazioni in ordine, mai modificate dopo l'applicazione
 sql/test/         test di isolamento SQL con due studi finti
 test/locale/      ambiente locale (Postgres + PostgREST + auth finta) e prova Playwright
